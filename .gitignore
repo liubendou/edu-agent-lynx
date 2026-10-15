@@ -2,6 +2,8 @@
 .DS_Store
 *.local
 *.log*
+# 云侧本地配置（含 API Key，绝不入库；模板见 cloud.local.example.json）
+cloud.local.json
 
 # Dist
 node_modules
