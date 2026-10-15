@@ -4,7 +4,8 @@
  * 评测集导出含负例标注位（M7 验收用："该触发"与"不该触发"都要有）。
  * 与领域事件同源（CONTRACTS §9 注：orchestrator 发、埋点同源）。
  */
-import type { EscalationResult, EscalationSignal, ISODate, SkillName } from '../domain/types';
+import type { ISODate, SkillName } from '../domain/types';
+import type { EscalationResult, EscalationSignal } from '../cloud/escalation';
 import type { ActivationSource } from './activator';
 
 /** 单次激活埋点样本。 */

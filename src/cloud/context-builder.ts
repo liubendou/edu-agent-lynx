@@ -10,7 +10,8 @@
  * 保证 history 只追加即可吃满前缀缓存。
  * 窗口内用标签分段（PRD §7.7⑥）：<skill> <memory> <alu> <catalog> 等，比裸文本稳。
  */
-import type { AluId, ISODate, SkillName, SkillParams } from '../domain/types';
+import type { AluId, ISODate, SkillName } from '../domain/types';
+import type { SkillParams } from '../skills/runtime';
 import type { SourceRef, TextSpan, UrlLocator } from '../domain/alu';
 import type { DailyBudget } from '../domain/queue';
 

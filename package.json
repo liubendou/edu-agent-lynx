@@ -6,6 +6,7 @@
     "build": "rspeedy build",
     "dev": "rspeedy dev",
     "preview": "rspeedy preview",
+    "typecheck": "tsc -b",
     "test": "rstest run"
   },
   "dependencies": {

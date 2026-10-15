@@ -4,7 +4,7 @@
  * description 为 frontmatter 原文（§7.8① 写"何时用"）。内置版本 1.0.0（热更新版本比对基线，D3）。
  */
 import type { PackAsset } from '../runtime';
-import type { SkillParams } from '../../domain/types';
+import type { SkillParams } from '../runtime';
 import { QUICK_LEARNING_REFERENCE_CONTENTS } from './references/quick-learning';
 
 /** quick 两用切换（§3 档1）：快速学习默认——预算 3~10 分钟、目标=建立地图、不入队（硬规则1）。 */

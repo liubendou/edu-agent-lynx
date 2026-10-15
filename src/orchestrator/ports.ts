@@ -14,15 +14,9 @@ import type { Alu, AluUserState, AnswerRecord } from '../domain/alu';
 import type { SessionEvent } from '../domain/events';
 import type { LearnerProfile, SessionSummary } from '../domain/profile';
 import type { DailyBudget } from '../domain/queue';
-import type {
-  AluId,
-  EscalationResult,
-  EscalationSignal,
-  ISODate,
-  KnowledgeSkillName,
-  SkillName,
-  SkillParams,
-} from '../domain/types';
+import type { AluId, ISODate, KnowledgeSkillName, SkillName } from '../domain/types';
+import type { EscalationResult, EscalationSignal } from '../cloud/escalation';
+import type { SkillParams } from '../skills/runtime';
 
 // ── SkillRuntimePort（CONTRACTS §6；components 用 string 按名引用，M3 catalog 收窄）──
 

@@ -7,7 +7,8 @@ import { State, type Card } from 'ts-fsrs';
 import { createAlu, type Alu, type AluUserState, type AnswerRecord } from '../domain/alu';
 import type { SessionEvent } from '../domain/events';
 import { createEmptyProfile } from '../domain/profile';
-import type { EscalationResult, EscalationSignal, SkillName } from '../domain/types';
+import type { EscalationResult, EscalationSignal } from '../cloud/escalation';
+import type { SkillName } from '../domain/types';
 import { Orchestrator, type Observation } from '../orchestrator/machine';
 import type {
   A2UiEmitterPort,

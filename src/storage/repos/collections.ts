@@ -6,6 +6,7 @@
 import type { Alu, AluUserState, AnswerRecord } from '../../domain/alu';
 import type { AluId } from '../../domain/types';
 import type { LearnerProfile, SessionSummary } from '../../domain/profile';
+import type { SessionEvent } from '../../domain/events';
 
 /** 成本护栏（§7.6：token 日预算 + 升级配额 + 闲时调度）。最终归属 src/cloud/budget.ts。 */
 export interface BudgetState {
@@ -67,6 +68,19 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 
 /** skill_packs 集合存储 key（与 common.ts COLLECTION_KEYS 同一命名空间约定；独立声明以免改动既有文件）。 */
 export const SKILL_PACKS_KEY = 'edu:col:skill_packs';
+
+/* ─────────────────────────────────────────────────────────────
+ * M2-int 追加：会话事件流水集合（SessionEvent 流水，埋点同源，§7.8④）。
+ * 仅追加声明——不进 saveAll/loadAll 批量通道，由 composition root 的
+ * StoragePort 适配器单点追加（orchestrator StorageCommitPatch.events 的落点；
+ * CONTRACTS §10 未列本集合，属 ports→storage 接线的补位，同 skill_packs 先例）。
+ * ───────────────────────────────────────────────────────────── */
+
+/** session_events 集合存储 key（同 SKILL_PACKS_KEY 命名空间约定）。 */
+export const SESSION_EVENTS_KEY = 'edu:col:session_events';
+
+/** 会话事件流水集合形状（追加式）。 */
+export type SessionEventLog = SessionEvent[];
 
 /** 已应用热更新包记录：字段与 CONTRACTS §6 SkillManifest 对齐（用宽类型 string，避免 storage 反向依赖 skills）+ 应用元数据。 */
 export interface InstalledSkillPack {

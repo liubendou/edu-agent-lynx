@@ -292,7 +292,9 @@ export class Orchestrator {
 
   /** 每回合：observation 回收 → 域计算/难度调节 → thought（组请求）→ action（流式下发+纠偏）。 */
   async runTurn(observation: Observation, now: Date = this.clock()): Promise<TurnOutcome> {
-    if (this.phase !== 'in_session' || !this.session || this.session.ended) {
+    // in_session ⇒ activation 非空（openSession 仅在激活后置 in_session）：守卫一并收窄，
+    // 否则下方 this.activation.mode 不可达地报 possibly-null。
+    if (this.phase !== 'in_session' || !this.session || !this.activation || this.session.ended) {
       throw new Error('runTurn: no active session');
     }
     const directives: string[] = [];
@@ -497,7 +499,11 @@ export class Orchestrator {
     directives: string[],
     now: Date,
   ): { judged?: { aluId: AluId; grade: Grade; fsrsApplied: boolean }; remediationStarted: boolean } {
-    const session = this.session!;
+    // 调用点（runTurn）已判空；方法内再守卫一次并固定到局部变量——
+    // this.session 在同方法内被 reassigned（answer 分支），局部变量收窄不受
+    // 中间函数调用影响，各分支改读局部值（值与当时的 this.session 相同）。
+    const session = this.session;
+    if (session === null) throw new Error('processObservation: no active session');
     switch (observation.kind) {
       case 'open':
         return { remediationStarted: false }; // 无域效应，纯开场
@@ -593,9 +599,9 @@ export class Orchestrator {
         return { remediationStarted: false };
       case 'stuck': {
         const directive = assessDifficulty({
-          skill: this.session.skill,
+          skill: session.skill,
           stuck: true,
-          recentGrades: this.session.records.filter((r) => !r.revoked).map((r) => r.grade),
+          recentGrades: session.records.filter((r) => !r.revoked).map((r) => r.grade),
         });
         this.applyDifficultyDirective(this.currentAlu ?? 'unknown', directive, directives);
         directives.push(directive.message ?? '先给脚手架，不直接判错');
@@ -603,7 +609,7 @@ export class Orchestrator {
       }
       case 'skip':
         this.consecutiveSkips += 1;
-        if (this.session.skill === 'review' && this.cursor < this.queue.length) {
+        if (session.skill === 'review' && this.cursor < this.queue.length) {
           this.cursor += 1; // 跳过的复习卡不作答、不判分，保持到期等下次
         }
         this.history.push({ role: 'user', content: '跳过', at: now.toISOString() });
@@ -613,9 +619,9 @@ export class Orchestrator {
         directives.push('响应用户原话；点名优先级最高（§7.8②），换档走重新激活流程');
         return { remediationStarted: false };
       case 'remediation_done': {
-        const sub = this.session.activeRemediation;
+        const sub = session.activeRemediation;
         if (sub) {
-          this.session = completeRemediation(this.session, sub.aluId); // requeued=true（间隔按答错处理）
+          this.session = completeRemediation(session, sub.aluId); // requeued=true（间隔按答错处理）
           directives.push(`补讲完成：${sub.aluId} 已重新入队，回到主流程`);
         }
         return { remediationStarted: false };

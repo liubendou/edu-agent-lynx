@@ -1,7 +1,9 @@
 /**
  * 四档会话事件流（CONTRACTS §9，逐字一致）+ 事件工厂 + 四档心流参数（§10.3，D9）。
  */
-import type { AluId, Grade, ISODate, SkillName, SkillParams, EscalationSignal, EscalationResult } from './types';
+import type { AluId, Grade, ISODate, SkillName } from './types';
+import type { SkillParams } from '../skills/runtime';
+import type { EscalationSignal, EscalationResult } from '../cloud/escalation';
 import type { AluStatus, AnswerRecord } from './alu';
 import type { SessionEndAnalysis, SessionEndTrigger } from './profile';
 

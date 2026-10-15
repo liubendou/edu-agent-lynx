@@ -18,7 +18,7 @@ export interface ActivationResult {
   /** remediation 子会话标记（standard 档 90 秒补讲，挂主会话，F7） */
   mode: SkillName | 'remediation';
   source: ActivationSource;
-  params: import('../domain/types').SkillParams;
+  params: import('../skills/runtime').SkillParams;
   aluIds: AluId[];
   reason: string;
 }
@@ -31,7 +31,7 @@ export type CardGeneratingSkill = 'standard-learning' | 'deep-learning';
 /** 各决策档的 SkillParams 覆盖（与技能包 manifest params 合成，硬规则1 优先）。 */
 const DECISION_OVERRIDES: Record<
   TodayDecision['kind'],
-  { skill: SkillName; mode: SkillName | 'remediation'; params?: import('../domain/types').SkillParams; reason: string }
+  { skill: SkillName; mode: SkillName | 'remediation'; params?: import('../skills/runtime').SkillParams; reason: string }
 > = {
   // 首启方案 D：20~30s 元课程小课 → quick 档（体验即教程，§6）；种子内容 M5 由 pipeline 提供
   first_run: {
@@ -70,7 +70,7 @@ export function activateForDecision(
   const mapping = DECISION_OVERRIDES[decision.kind];
   const manifest = skills.getActiveSkill(mapping.mode);
   // manifest params 为底、决策覆盖为面；硬规则1 代码强制：quick 恒禁卡片生成
-  const merged: import('../domain/types').SkillParams = {
+  const merged: import('../skills/runtime').SkillParams = {
     ...manifest.params,
     ...(mapping.params ?? {}),
     ...(mapping.skill === 'quick-learning' ? { cardGeneration: false } : {}),

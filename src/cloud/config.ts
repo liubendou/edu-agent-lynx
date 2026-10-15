@@ -6,9 +6,9 @@
  * DeepSeek 走 OpenAI 兼容接口：POST {base}/chat/completions，原生 fetch，不引 SDK。
  */
 
-/** 默认（flash）模型名：承担 95%+ 日常生成。D2：实际名待 Key 核实，集中在此一处。 */
-export const MODEL_FLASH = 'deepseek-v4.1-flash';
-/** 卡死升级（pro）模型名。D2：实际名待 Key 核实，集中在此一处。 */
+/** 默认（flash）模型名：承担 95%+ 日常生成。D2 已实测核实（GET /models）：deepseek-flash（显示名 DeepSeek-V4.1-Flash，支持图像输入，M6 识图可用）。 */
+export const MODEL_FLASH = 'deepseek-flash';
+/** 卡死升级（pro）模型名。D2 已实测核实：deepseek-v4-pro。 */
 export const MODEL_PRO = 'deepseek-v4-pro';
 
 /** DeepSeek OpenAI 兼容端点（不含 /chat/completions 后缀）。 */

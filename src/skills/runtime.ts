@@ -3,13 +3,22 @@
  * 装载协议：name+description 常驻窗口（轻量索引），正文 promptTemplate 按需加载（loadBody/getBody 惰性物化）；
  * 来源优先级：热更新已应用包 > 内置包（版本比较与选择；内置随 App 升级始终兜底，D3）。
  */
-import type { KnowledgeSkillName, SkillName, SkillParams } from '../domain/types';
+import type { KnowledgeSkillName, SkillName } from '../domain/types';
 import type { KVStore } from '../storage/kv';
 import { SKILL_PACKS_KEY } from '../storage/repos/collections';
 import { BUILT_IN_PACKS } from './packs';
 
 /** 工具名（CONTRACTS §6；注册表实现在 M6 tools/registry.ts）。 */
 export type ToolName = 'web_search' | 'vision_capture' | 'tts_speak' | 'asr_transcribe';
+
+/** 技能包参数（CONTRACTS §6；M2-int 归位自 domain/types.ts）。
+ *  quick 两用切换参数（§3 档1：预算=长/目标=建立地图 vs 预算=90s/目标=唤醒）。
+ *  PRD §7.2 技能包四要素中的"数据结构"不设 manifest 字段——ALU/消息等结构由全局契约承担（§1/§5），F13 注。 */
+export interface SkillParams {
+  budgetMinutes?: [number, number];   // 时长预算区间
+  goal?: 'map' | 'recall';            // 收敛为 PRD §3 档1 两态（原 understand/master 为越界扩展，已删，F12）
+  cardGeneration: boolean;            // 是否允许生成复习卡（硬规则1：quick=false）
+}
 
 /** 组件名——暂置类型（CONTRACTS §5 16 零件；最终归属 src/a2ui/catalog.ts，M3 建立时自此迁移，同 domain/types.ts 暂置模式）。 */
 export type ComponentName =

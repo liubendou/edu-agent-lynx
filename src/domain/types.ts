@@ -1,8 +1,8 @@
 /**
  * 公共基础类型（CONTRACTS §0，逐字一致）。
- * 另暂置三个被 domain/events.ts 引用、但契约归属其他模块的类型
- * （SkillParams → skills/runtime.ts；EscalationSignal/EscalationResult → cloud/*），
- * 待对应模块（M2 后续里程碑）建立时迁移或自此 re-export。
+ * M2-int 归位（T4）：SkillParams 迁往 src/skills/runtime.ts（CONTRACTS §6），
+ * EscalationSignal/EscalationResult 迁往 src/cloud/escalation.ts（CONTRACTS §7）；
+ * 本文件只保留契约 §0 的公共类型。
  */
 
 /** 逻辑档位。PRD §3：Quick 一批两用（快速学习/快速回顾）；score-boost 非档位、不进此联合 */
@@ -31,27 +31,3 @@ export type AluKind = 'concept' | 'criterion' | 'procedure' | 'resource';
 export type AluId = string;
 export type ModuleId = string;
 export type SubjectId = string;
-
-/** ── 暂置类型（契约出处标注于各注释；最终归属见文件头注） ── */
-
-/** 技能包参数（CONTRACTS §6；最终归属 src/skills/runtime.ts）。
- *  quick 两用切换参数（§3 档1：预算=长/目标=建立地图 vs 预算=90s/目标=唤醒）。 */
-export interface SkillParams {
-  budgetMinutes?: [number, number];   // 时长预算区间
-  goal?: 'map' | 'recall';            // 收敛为 PRD §3 档1 两态（原 understand/master 为越界扩展，已删，F12）
-  cardGeneration: boolean;            // 是否允许生成复习卡（硬规则1：quick=false）
-}
-
-/** 卡死升级信号（CONTRACTS §7；最终归属 src/cloud/*）。（§7.6：五类触发） */
-export type EscalationSignal =
-  | { type: 'retry_no_converge'; turns: number }     // 同义重试连续不收敛
-  | { type: 'tool_failures'; consecutive: number }   // 工具连续失败
-  | { type: 'output_deviation'; detail: string }     // 输出反复偏离目标
-  | { type: 'user_correction'; detail: string }      // 用户明显不满或纠错
-  | { type: 'low_confidence'; selfReport: string };  // 模型自评低置信
-
-/** 升级结果（CONTRACTS §7；最终归属 src/cloud/*） */
-export interface EscalationResult {
-  nextStep: string;          // 拿到"下一步怎么做"，随即切回 flash 执行
-  loggedToFacts: boolean;    // 记入学习事实层（"这个点在 Flash 上卡过"）
-}

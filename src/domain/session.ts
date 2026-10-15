@@ -10,7 +10,7 @@
 import type { Card, FSRS } from 'ts-fsrs';
 import type { AnswerRecord, PrereqGraph } from './alu';
 import type { AluId, Grade, ISODate, SkillName } from './types';
-import type { SkillParams } from './types';
+import type { SkillParams } from '../skills/runtime';
 import { canTransition, tracePrereqSuspects } from './alu';
 import { deriveStatus, scheduleReview } from './fsrs';
 import {

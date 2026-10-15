@@ -242,12 +242,17 @@ export class CloudClient implements CloudLikeClient {
           if (!trimmed.startsWith('data:')) continue;
           const payload = trimmed.slice('data:'.length).trim();
           if (payload === '[DONE]' || payload === '') continue;
+          // 无 `= null` 初始化：catch 分支 continue 直接跳行，唯一到达后续代码的
+          // 路径是 try 正常完成（JSON.parse 成功且已赋值），判空收窄才成立。
           let chunk: {
             choices?: { delta?: { content?: string; tool_calls?: ToolCallDelta[] } }[];
             usage?: RawUsage | null;
-          } | null = null;
+          } | null;
           try {
-            chunk = JSON.parse(payload) as typeof chunk;
+            chunk = JSON.parse(payload) as {
+              choices?: { delta?: { content?: string; tool_calls?: ToolCallDelta[] } }[];
+              usage?: RawUsage | null;
+            } | null;
           } catch {
             continue; // 单行解析失败跳过（残缺块不致命）
           }

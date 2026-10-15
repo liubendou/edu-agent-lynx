@@ -5,11 +5,25 @@
  * 每次卡死只升一次（会话内去重）；升级与结果产出 skill_escalation 事件（供画像
  * "这个点在 Flash 上卡过"留痕）。升级配额由 budget.ts 护栏。
  */
-import type { EscalationSignal, EscalationResult, SkillName } from '../domain/types';
+import type { SkillName } from '../domain/types';
 import type { SessionEvent } from '../domain/events';
 import { createSkillEscalationEvent } from '../domain/events';
 import type { CloudLikeClient } from './client';
 import type { BudgetGuard } from './budget';
+
+/** 卡死升级信号（CONTRACTS §7；M2-int 归位自 domain/types.ts）。（§7.6：五类触发） */
+export type EscalationSignal =
+  | { type: 'retry_no_converge'; turns: number }     // 同义重试连续不收敛
+  | { type: 'tool_failures'; consecutive: number }   // 工具连续失败
+  | { type: 'output_deviation'; detail: string }     // 输出反复偏离目标
+  | { type: 'user_correction'; detail: string }      // 用户明显不满或纠错
+  | { type: 'low_confidence'; selfReport: string };  // 模型自评低置信
+
+/** 升级结果（CONTRACTS §7；M2-int 归位自 domain/types.ts） */
+export interface EscalationResult {
+  nextStep: string;          // 拿到"下一步怎么做"，随即切回 flash 执行
+  loggedToFacts: boolean;    // 记入学习事实层（"这个点在 Flash 上卡过"）
+}
 
 /** 同义重试连续不收敛阈值（连续 N 次用户同义重试 → 卡死信号）。 */
 export const RETRY_NO_CONVERGE_THRESHOLD = 3;

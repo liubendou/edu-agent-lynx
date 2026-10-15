@@ -9,7 +9,7 @@ import {
   buildEscalationPrompt,
   escalationKey,
 } from '../cloud';
-import type { EscalationSignal } from '../domain/types';
+import type { EscalationSignal } from '../cloud/escalation';
 import type { SessionEvent } from '../domain/events';
 import { BudgetGuard } from '../cloud';
 import { Repositories } from '../storage/repos';
