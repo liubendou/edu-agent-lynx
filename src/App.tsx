@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useState } from '@lynx-js/react';
 import './App.css';
-import { createAppMachine, type AppMachine } from './composition';
+import { createAppMachine, seedFirstRunContent, type AppMachine } from './composition';
 import type { BootOutcome } from './orchestrator/machine';
 import { readColorScheme, themeClassName } from './design-system/theme';
 import { setHapticsSignals } from './components/haptics';
@@ -46,7 +46,15 @@ export function App() {
           powerSave: false,
           sustainedJank: false,
         });
-        const outcome = await m.orchestrator.boot();
+        const outcome0 = await m.orchestrator.boot();
+        // M7 T1 种子接线：首启判定成立 → M5 真种子幂等灌库（已有数据不覆盖）→ 重新决策
+        let outcome = outcome0;
+        if (outcome0.isFirstRun) {
+          const seeded = await seedFirstRunContent(m.repos);
+          if (seeded > 0) outcome = await m.orchestrator.boot();
+        }
+        // D3 收缝：配置了 skillUpdateManifestUrl 才拉取热更新（未配置 = skipped，静默零网络）
+        void m.skillUpdater.checkAndApplyFromSettings();
         if (!alive) return;
         setMachine(m);
         setBoot(outcome);

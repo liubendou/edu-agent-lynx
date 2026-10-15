@@ -208,6 +208,16 @@ export class Orchestrator {
     });
     this.decision = result;
     this.activation = activateForDecision(result.decision, this.ports.skills);
+    if (result.decision.kind === 'first_run') {
+      // M7 T1 种子接线：首启批次 = 元课程种子 ALU（M5 真种子替换 M4 fixture 占位）。
+      // moduleId 契约 = subjectId.module（CONTRACTS §8），按 meta 学科前缀过滤；
+      // 库中无种子 ALU（旧库/灌库前）保持空批次原语义。
+      const metaIds = Object.values(this.alus)
+        .filter((a) => a.moduleId.startsWith('meta.'))
+        .map((a) => a.id)
+        .sort();
+      if (metaIds.length > 0) this.activation = { ...this.activation, aluIds: metaIds };
+    }
     this.recordActivationSample(
       `decision:${result.decision.kind}`,
       this.activation.skill,

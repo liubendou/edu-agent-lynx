@@ -103,7 +103,11 @@ export function queueItemFrom(
   };
 }
 
-/** 到期过滤：due ≤ now 且非 New 态（见过不入队，硬规则1）。 */
+/** 到期过滤：due ≤ now 且非 New 态（见过不入队，硬规则1）。
+ *  M7 集成验收修正：硬规则2 出卡入队的首复卡（createEnqueuedState → New，due=T+1）
+ *  此前被"非 New"一刀切排除，T+1 永不到期——已入队（learned_once）的 New 卡按 due
+ *  正常进入复习决策；未入队（unseen/seen）状态仍不产生欠账，硬规则1 语义不变。 */
 export function isDue(state: AluUserState, now: Date): boolean {
-  return state.fsrs.state !== State.New && state.fsrs.due.getTime() <= now.getTime();
+  const enqueued = state.fsrs.state !== State.New || state.status === 'learned_once';
+  return enqueued && state.fsrs.due.getTime() <= now.getTime();
 }

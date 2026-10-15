@@ -17,15 +17,31 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+        // M7 T4：ABI 集合由下方 splits.abi 限定（AGP 约束：abiFilters 与 splits 不可共存）
     }
 
     buildTypes {
         release {
+            // M7 T4：minify 保持 false——R8/资源收缩对 Lynx 反射加载 bundle 与 sherpa-onnx JNI 的
+            // keep 规则未经验证，V1 用体积换确定性；开启前需补 keep 规则并真机回归（见 docs/05 报告）。
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // M7 T4：测试分发用 debug key 签名（本机 debug.keystore，免配正式证书即可 adb install；
+            // 正式发布前必须换独立 release keystore 并走受管签名流程）
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    // M7 T4：ABI 拆分产出 app-<abi>-release.apk（universalApk=false：不产全 ABI 合包）
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
         }
     }
     compileOptions {

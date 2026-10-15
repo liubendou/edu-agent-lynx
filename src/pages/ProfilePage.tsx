@@ -8,7 +8,7 @@
  *  - 记录可见：作答流水（review_log，仅 correct/wrong 落盘 D8）+ 会话摘要尾部；
  *  - 成绩录入（D4）入口在 M6 识图链路接通后补（GradeEvent 手动录入兜底同批）。
  */
-import { useCallback, useState } from '@lynx-js/react';
+import { useCallback, useEffect, useState } from '@lynx-js/react';
 import { declareBoundary } from '../domain/profile';
 import { setHapticsSignals } from '../components/haptics';
 import type { AppMachine } from '../composition';
@@ -22,6 +22,11 @@ export interface ProfilePageProps {
 export function ProfilePage({ machine, onBack }: ProfilePageProps) {
   const { snap, reload } = useReposSnapshot(machine);
   const [boundaryText, setBoundaryText] = useState('');
+  // M7 T3 补缝：技能包热更新端点（D3）与 web_search 后端（T3b）的设置入口
+  const [manifestUrl, setManifestUrl] = useState('');
+  const [searchEndpoint, setSearchEndpoint] = useState('');
+  const [searchKey, setSearchKey] = useState('');
+  const [advancedNote, setAdvancedNote] = useState<string | null>(null);
 
   const settings = snap?.settings;
   const profile = snap?.profile ?? null;
@@ -76,6 +81,37 @@ export function ProfilePage({ machine, onBack }: ProfilePageProps) {
     [profile, machine, reload],
   );
 
+  // M7 T3：settings 快照到达后回填高级设置输入框当前值
+  useEffect(() => {
+    if (settings === undefined) return;
+    setManifestUrl(settings.skillUpdateManifestUrl ?? '');
+    setSearchEndpoint(settings.webSearchEndpoint ?? '');
+    setSearchKey(settings.webSearchKey ?? '');
+  }, [settings]);
+
+  /** 保存高级设置：manifestUrl 保存后即时检查热更新（D3 checkAndApplyFromSettings）；
+   *  web_search 后端保存落库（composition 装配时读取，重启后生效）。空值 = 清除配置。 */
+  const saveAdvanced = useCallback(async () => {
+    const base = settings ?? { privacyAdaptive: true, privacyCloudInference: true, cloudSync: false };
+    const url = manifestUrl.trim();
+    const endpoint = searchEndpoint.trim();
+    await machine.repos.saveSettings({
+      ...base,
+      skillUpdateManifestUrl: url === '' ? undefined : url,
+      webSearchEndpoint: endpoint === '' ? undefined : endpoint,
+      webSearchKey: searchKey.trim() === '' ? undefined : searchKey.trim(),
+    });
+    let note = '已保存';
+    if (url !== '') {
+      const result = await machine.skillUpdater.checkAndApplyFromSettings();
+      note = `已保存，热更新检查：${result === 'updated' ? '有更新已应用' : result === 'skipped' ? '无更新' : '校验失败已回滚'}`;
+    } else {
+      note = endpoint !== '' ? '已保存（web_search 后端重启后生效）' : '已清除（热更新与 web_search 后端均禁用）';
+    }
+    setAdvancedNote(note);
+    await reload();
+  }, [settings, manifestUrl, searchEndpoint, searchKey, machine, reload]);
+
   return (
     <view className="page">
       <view className="page-head">
@@ -101,6 +137,40 @@ export function ProfilePage({ machine, onBack }: ProfilePageProps) {
               </view>
             );
           })}
+        </view>
+
+        {/* M7 T3 补缝：技能包热更新端点（D3）+ web_search 后端（T3b）；空值=禁用 */}
+        <view className="a2ui-card a2ui-grow">
+          <text className="Text Text--card-title">技能与工具</text>
+          <text className="Text Text--aux" style={{ color: 'var(--ink-soft)' }}>
+            技能包热更新 manifest 地址（留空=禁用；保存后立即检查）
+          </text>
+          <input
+            className="home-confess-input"
+            placeholder="https://example.com/skill-manifest.json"
+            bindinput={(e) => setManifestUrl(e.detail.value)}
+          />
+          <text className="Text Text--aux" style={{ color: 'var(--ink-soft)' }}>
+            web_search 后端端点与 Key（留空=该工具返回未配置；重启后生效）
+          </text>
+          <input
+            className="home-confess-input"
+            placeholder="https://search.example.com/api"
+            bindinput={(e) => setSearchEndpoint(e.detail.value)}
+          />
+          <input
+            className="home-confess-input"
+            placeholder="后端鉴权 Key（可选，仅存本机）"
+            bindinput={(e) => setSearchKey(e.detail.value)}
+          />
+          <view className="home-confess">
+            <view className="s-footer-btn pressable" bindtap={() => void saveAdvanced()}>
+              <text className="Text Text--body">保存设置</text>
+            </view>
+          </view>
+          {advancedNote !== null ? (
+            <text className="Text Text--aux" style={{ color: 'var(--ink-soft)' }}>{advancedNote}</text>
+          ) : null}
         </view>
 
         {/* 目标（全部记录可见） */}

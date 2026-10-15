@@ -76,11 +76,11 @@ describe('M6 工具注册表：门控语义', () => {
     expect(increments).toEqual([]);
   });
 
-  test('web_search 未接入返回 {ok:false} 明确 not_implemented（不抛）', async () => {
+  test('web_search 未配置返回 {ok:false} 明确 not_configured（不抛）——M7 T3b 可配置后端语义', async () => {
     const invoker = createToolInvoker({ vision: fakeVisionPort(), speechBridge: null });
     const result = await invoker.callTool('web_search', { query: 'x' }) as { ok: boolean; error: string };
     expect(result.ok).toBe(false);
-    expect(result.error).toContain('not_implemented');
+    expect(result.error).toContain('not_configured');
   });
 });
 

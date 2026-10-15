@@ -52,6 +52,14 @@ export interface ToolEvent {
 
 export type ToolEventSink = (event: ToolEvent) => void;
 
+/** web_search 可配置后端（M7 T3b）：settings 配 endpoint+key；空 = 工具返回 not-configured 业务失败。 */
+export interface SearchBackend {
+  /** 搜索服务端点（POST，JSON { query }；响应 JSON {results|data:[...]} 或数组，其余原文透传）。 */
+  endpoint: string;
+  /** 可选 Bearer 鉴权 Key。 */
+  apiKey?: string;
+}
+
 /** 日限额计数存储（KV 持久化；按日期分桶，读时清理过期桶）。 */
 export interface ToolUsageStore {
   countFor(date: string, name: string): Promise<number>;
@@ -59,6 +67,9 @@ export interface ToolUsageStore {
 }
 
 const TOOL_USAGE_KEY = 'edu:col:tool_usage';
+
+/** web_search 请求超时（M7 T3b；对齐云侧默认超时量级）。 */
+const SEARCH_TIMEOUT_MS = 15_000;
 
 type ToolUsageShape = Record<string, Partial<Record<string, number>>>;
 
@@ -96,6 +107,8 @@ export interface ToolInvokerDeps {
   vision: VisionCloudPort;
   /** 语音原生桥（探测结果；null = web/测试环境，语音工具返回 unavailable）。 */
   speechBridge: SpeechNativeBridge | null;
+  /** web_search 后端（M7 T3b：composition 从 settings 注入；缺省 = not-configured 业务失败）。 */
+  search?: SearchBackend;
   /** 事件流水（tool_call/tool_result；composition 桥接 session_events）。 */
   onEvent?: ToolEventSink;
   /** 限额存储（缺省内存实现——单会话级；真机注入 KV 版持久化）。 */
@@ -198,13 +211,55 @@ export function createToolInvoker(deps: ToolInvokerDeps): ToolInvokerPortExt {
     return result;
   }
 
-  /** web_search：V1 M6 未接真实搜索后端（ARCHITECTURE §12 M6 范围为 registry+vision+语音），返回明确未接入。 */
-  async function invokeSearch(): Promise<unknown> {
-    return { ok: false, error: 'not_implemented: web_search 在 V1 M6 未接入（识图为主摄入路径），接入后沿用本注册表白名单/限额' };
+  /** web_search：可配置后端（M7 T3b）。未配置 = {ok:false, not_configured} 业务失败不抛错；
+   *  已配置 = 原生 fetch POST（无新依赖，同 updater defaultFetch 口径），失败降级结果对象。 */
+  async function invokeSearch(args: unknown): Promise<unknown> {
+    const { query } = (args ?? {}) as { query?: unknown };
+    if (typeof query !== 'string' || query.trim().length === 0) {
+      return { ok: false, error: 'invalid_args: query 必填' };
+    }
+    const backend = deps.search;
+    if (backend === undefined || backend.endpoint.trim() === '') {
+      return { ok: false, error: 'not_configured: web_search 后端未配置（设置页配置端点后可用，§7.3 结果必留出处）' };
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (backend.apiKey !== undefined && backend.apiKey.length > 0) {
+        headers['Authorization'] = `Bearer ${backend.apiKey}`;
+      }
+      const res = await fetch(backend.endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query: query.trim() }),
+        signal: controller.signal,
+      });
+      if (!res.ok) return { ok: false, error: `search_http: HTTP ${res.status}` };
+      const text = await res.text();
+      try {
+        const parsed: unknown = JSON.parse(text);
+        // 常见形状容忍：数组 / {results:[]} / {data:[]}；其余原文透传（调用方按 ⑧ 段 digest 消费）
+        if (Array.isArray(parsed)) return { ok: true, query, results: parsed };
+        if (parsed !== null && typeof parsed === 'object') {
+          const obj = parsed as Record<string, unknown>;
+          const results = Array.isArray(obj['results']) ? obj['results'] : Array.isArray(obj['data']) ? obj['data'] : undefined;
+          if (results !== undefined) return { ok: true, query, results };
+        }
+        return { ok: true, query, raw: text.slice(0, 2000) };
+      } catch {
+        return { ok: true, query, raw: text.slice(0, 2000) };
+      }
+    } catch (e) {
+      const reason = e instanceof Error && e.name === 'AbortError' ? 'search_timeout' : 'search_failed';
+      return { ok: false, error: `${reason}: ${e instanceof Error ? e.message : String(e)}` };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   const handlers: Record<ToolName, (args: unknown) => Promise<unknown>> = {
-    web_search: () => invokeSearch(),
+    web_search: (args) => invokeSearch(args),
     vision_capture: (args) => invokeVision(args),
     tts_speak: (args) => invokeTts(args),
     asr_transcribe: (args) => invokeAsr(args),

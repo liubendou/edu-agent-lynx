@@ -16,6 +16,7 @@ import type { BootOutcome } from '../orchestrator/machine';
 import type { TodayDecision } from '../domain/decision';
 import type { Route } from './routes';
 import { useReposSnapshot } from './hooks/useReposSnapshot';
+import { SEED_META_COURSE } from '../pipeline/seeds';
 
 export interface HomePageProps {
   machine: AppMachine;
@@ -76,8 +77,9 @@ export function Home({ machine, boot, navigate, onOpenSession }: HomePageProps) 
         <view className="page-body home-stream">
           <view className="a2ui-card a2ui-grow home-first">
             <text className="Text Text--hero">先把方法装进来</text>
+            {/* M7 T1：首启元课程文案改由 M5 真种子驱动（替换 M4 fixture 占位） */}
             <text className="Text Text--body" style={{ color: 'var(--ink-soft)' }}>
-              一节 90 秒小课：怎么用"提取练习"把东西真正记住。边讲边插问，答对才算学会。
+              {`《${SEED_META_COURSE.subjects[0].name}》小课：${SEED_META_COURSE.modules.map((m) => m.name).join('、')}——边讲边插问，答对才算学会。`}
             </text>
             <view className="tpp-start pressable" bindtap={() => onOpenSession()}>
               <text className="Text Text--body tpp-start-text">开始小课</text>

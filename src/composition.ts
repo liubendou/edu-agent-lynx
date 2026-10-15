@@ -50,6 +50,8 @@ import { A2UIStreamParser, type A2UISurfaceSnapshot } from './a2ui/stream-parser
 import { createToolInvoker, createKvToolUsageStore, type ToolEvent } from './tools/registry';
 import { createDeepSeekVisionClient } from './tools/vision';
 import { detectSpeechBridge } from './tools/tts';
+import { ALL_SEED_ALUS } from './pipeline/seeds';
+import { createSkillUpdater } from './skills/updater';
 
 // ── ①②③ 稳定前缀默认内容（M2 占位；M3 catalog 本体建成后替换 catalog 段）──
 
@@ -310,6 +312,23 @@ export class RepositoriesStoragePort implements StoragePort {
   }
 }
 
+// ── 种子灌库（M7 T1：首启接线）────────────────────────────────────
+
+/**
+ * 首启种子灌库（M7 T1）：把 M5 种子包的 ALU 幂等写入 alu 主数据集合——
+ * 逐 id 比对，已有数据一律不覆盖（幂等），返回本次新增条数（0 = 库中已齐）。
+ * 调用时机：App 冷启动 boot 判定 isFirstRun 成立后（App.tsx 接线）。
+ */
+export async function seedFirstRunContent(repos: Repositories): Promise<number> {
+  const existing = await repos.listAlus();
+  const additions = ALL_SEED_ALUS.filter((alu) => existing[alu.id] === undefined);
+  if (additions.length === 0) return 0;
+  const merged: Record<string, (typeof ALL_SEED_ALUS)[number]> = { ...existing };
+  for (const alu of additions) merged[alu.id] = alu;
+  await repos.saveAll({ alu: merged });
+  return additions.length;
+}
+
 // ── 一处装配（composition root 本体）───────────────────────────────
 
 /** tool_call/tool_result 流水追加（session_events 集合；与 StoragePort.events 同一落点，可丢不可阻）。 */
@@ -368,6 +387,8 @@ export interface AppMachine {
   skills: SkillRuntimePort;
   /** 技能运行时本体（D3 热更新 applyOverrides/hydrateFromStorage 入口）。 */
   runtime: SkillRuntimeImpl;
+  /** D3 热更新客户端（checkAndApplyFromSettings：App 冷启动后台检查 + ProfilePage 保存端点后即时检查）。 */
+  skillUpdater: ReturnType<typeof createSkillUpdater>;
 }
 
 /**
@@ -404,6 +425,16 @@ export async function createAppMachine(options: CompositionOptions = {}): Promis
 
   const a2uiParser = new A2UIStreamParser();
   const emitter = new ParsingA2UiEmitter(a2uiParser);
+  // M7 T3b：web_search 可配置后端（settings 配 endpoint+key；空=工具返回 not-configured
+  // 业务失败不抛错）。settings 在装配时读一次（KV 持久化），运行期改配置重启生效。
+  const settings = await repos.loadSettings();
+  const searchBackend =
+    settings.webSearchEndpoint !== undefined && settings.webSearchEndpoint.trim() !== ''
+      ? {
+          endpoint: settings.webSearchEndpoint.trim(),
+          ...(settings.webSearchKey !== undefined && settings.webSearchKey !== '' ? { apiKey: settings.webSearchKey } : {}),
+        }
+      : undefined;
   // M6：真工具注册表（白名单/限额/offline 标注）替换 NoopToolInvoker；tool_call/tool_result
   // 流水桥接进 session_events 集合（与 SessionEvent 同源落盘，可丢不可阻）。
   // 识图端口与云侧配置同源（Mock 模式下识图请求返回明确 unavailable，recognizeImage 兜底成结果对象）。
@@ -415,13 +446,15 @@ export async function createAppMachine(options: CompositionOptions = {}): Promis
       onEvent: (event: ToolEvent) => {
         void appendToolEvent(kv, event);
       },
+      ...(searchBackend !== undefined ? { search: searchBackend } : {}),
       ...(options.now !== undefined ? { now: options.now } : {}),
     });
   const storage = new RepositoriesStoragePort(repos);
+  const skillUpdater = createSkillUpdater(runtime, kv);
 
   const ports: OrchestratorPorts = { skills, cloud: cloudPort, emitter, tools, storage };
   const orchestratorOpts: OrchestratorOptions = options.orchestrator
     ?? (options.now !== undefined ? { now: options.now } : {});
   const orchestrator = new Orchestrator(ports, orchestratorOpts);
-  return { orchestrator, ports, emitter, a2uiParser, tools, storage, repos, cloud, skills, runtime };
+  return { orchestrator, ports, emitter, a2uiParser, tools, storage, repos, cloud, skills, runtime, skillUpdater };
 }

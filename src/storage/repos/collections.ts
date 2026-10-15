@@ -49,6 +49,8 @@ export interface AppSettings {
   reduceMotion?: boolean;          // 系统"减少动态效果"（UID §7.4 降级档输入；静止档仍保留触觉，D1）
   skillUpdateManifestUrl?: string; // 技能包热更新端点（D3）：manifest 地址，可配置；开发期指向本地 fixture
   ttsModelDownloaded?: boolean;    // 语音模型按需下载状态（§7.3）
+  webSearchEndpoint?: string;      // web_search 后端端点（M7 T3b 可配置后端）：空/未配置=工具返回 not-configured 业务失败
+  webSearchKey?: string;           // web_search 后端鉴权 Key（本地配置，不进云侧请求前缀）
 }
 
 /** 默认设置：两分级开关默认开（端侧自适应/云侧推理为产品核心能力，数据不出端、不用于训练，§5.5）；云同步默认关（§7.4）。 */
