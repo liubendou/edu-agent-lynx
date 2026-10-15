@@ -17,7 +17,7 @@ export type SkillName =
 /** 知识库型技能（总控 §0：score-boost 兼任自适应/方法论知识库） */
 export type KnowledgeSkillName = 'score-boost';
 
-/** 判定三档。UID §5.4 / PRD §3 档2：反馈只给三档，不留"差不多对" */
+/** 判定三档。UID §5.4 / PRD §3 档2：反馈只给三档，不留"差不多对"。fuzzy 不记账（D8，映射见 §2） */
 export type Grade = 'correct' | 'fuzzy' | 'wrong';
 
 /** ISO-8601 字符串统一用 string 存储与传输 */
@@ -60,7 +60,7 @@ export interface Alu {
   back: string;                  // 背面（判据/答案）
   variants: string[];            // 反面/变式（换问法）；资源型可为空（附录 res-001）
   prereq: AluId[];               // 依赖：前置 ALU，可成图（§4.6② 前置归因沿此向上游追溯）
-  difficulty: number;            // 难度 1~5（附录样例 0~3，统一为整数刻度，0=资源型占位）
+  difficulty: number;            // 难度整数刻度 1~5（资源型占位 0）。附录样例为 0~3 旧刻度，种子包录入按旧 n→新 n+1 抬升（旧3→新4），5 保留给运行时实时上调（§10.1③，F9）
   source: SourceRef;             // 出处（创建时即写入，回链不自研）
   isPriority?: boolean;          // 高质量档升级为"重点"：入队优先级更高、间隔更保守（§4.5）
 }
@@ -71,6 +71,9 @@ export interface AluUserState {
   status: AluStatus;             // 未见→见过→学过一轮→暂记→已稳固
   fromMode: FromMode | null;     // 来源模式（§4.2）
   fsrs: Card;                    // ts-fsrs 卡片（D/S/R 参数、due、reps、lapses；§4.6①）
+  bookmarked?: boolean;          // 用户主动收藏/标记重点（§4.6③ 队列来源②；D11）：入口=会话卡片"标记重点"动作
+                                 // + 资料库列表操作，均可取消。仅提升抽取优先级，不改 FSRS 间隔策略——
+                                 // 间隔保守度仍由 Alu.isPriority（高质量档自动升级）决定，两者语义独立
   lastAnswers: AnswerRecord[];   // 最近作答记录（截尾保留最近 10 条）
   createdAt: ISODate;
   updatedAt: ISODate;
@@ -78,10 +81,12 @@ export interface AluUserState {
 
 /** 产品状态与 FSRS State 的映射由 domain/fsrs.ts 实现：
  *  未见/见过=New（见过不入队，硬规则1）；学过一轮=入队 Learning→Review，due=T+1；
- *  暂记=Review 且近期有 lapse；已稳固=Review 且 scheduled_days≥21（建议值，待裁决 D5） */
+ *  暂记=Review 且近期有 lapse；已稳固=Review 且 scheduled_days≥21（D5 已裁决：技术默认值，参数化可调） */
 export type AluStatus = 'unseen' | 'seen' | 'learned_once' | 'retaining' | 'consolidated';
 
-/** 作答记录（学习事实层原子级，§5.1 A） */
+/** 作答记录（学习事实层原子级，§5.1 A）。
+ *  D8 口径：grade='fuzzy' 的记录仅会话内留存（供"模糊→对"struggleWin 判定与埋点），
+ *  不落 review_log、不写 FSRS；其后同卡答 correct 时该条记录标 struggleWin=true 并正常持久化。 */
 export interface AnswerRecord {
   aluId: AluId;
   grade: Grade;                  // 对/错/模糊 三档
@@ -89,7 +94,7 @@ export interface AnswerRecord {
   skill: SkillName;              // 在哪个档答的
   at: ISODate;
   revoked?: boolean;             // 1s 撤销窗口内撤销（UID §三），撤销不计入 FSRS
-  struggleWin?: boolean;         // "挣扎后想起来"：fuzzy→correct 的高价值正反馈（§10.2）
+  struggleWin?: boolean;         // "挣扎后想起来"：fuzzy→correct 的高价值正反馈（§10.2；会话内可见 fuzzy 记录即可，D8）
 }
 
 /** 板块与学科空间（§4.2） */
@@ -102,15 +107,18 @@ export interface Subject { id: SubjectId; name: string; moduleIds: ModuleId[] }
 ```ts
 import { fsrs, generatorParameters, createEmptyCard, Rating, State, type FSRS, type Grade as FsrsGrade, type RecordLogItem } from 'ts-fsrs';
 
-/** 三档 → FSRS Rating 映射（唯一映射表，全工程只用这一处）：
- *  correct→Good(3)  fuzzy→Hard(2)  wrong→Again(1)。Easy(4) 不暴露给用户。 */
-export function gradeToRating(g: Grade): Rating;
+/** 判定 → FSRS Rating 映射（唯一映射表，全工程只用这一处；用户裁决 D8，总控 §0.1）：
+ *  correct→Good(3)  wrong→Again(1)。fuzzy 不映射、不写 FSRS、不进 review_log
+ *  （UID §5.4"模糊不记账"口径胜出，取代 PRD §4.5/§4.6① 中"模糊→间隔↓"的表述）。
+ *  fuzzy 处置：触发"再讲一遍"脚手架；该卡本轮稍后重现、不产生新欠账；AnswerRecord 仅会话内留存。
+ *  Easy(4) 不暴露给用户。 */
+export function gradeToRating(g: 'correct' | 'wrong'): Rating;
 
 /** 调度器实例：目标保持率 0.9（§4.6①"按目标保持率反解下次到期日"） */
 export function createScheduler(requestRetention = 0.9): FSRS; // fsrs(generatorParameters({ request_retention }))
 
 /** 冷启动：新卡 createEmptyCard + 默认 w；初次入队 due=T+1（§4.5/§4.6①）。
- *  艾宾浩斯 1-2-4-7-15 为骨架参照（V1 用默认参数演进；个人参数优化见待裁决 D6）。 */
+ *  艾宾浩斯 1-2-4-7-15 为骨架参照（V1 共用默认参数演进——D6 已裁决；个人参数优化列 V1.x）。 */
 export function newCardForQueue(now: Date): Card;
 
 /** 复习队列条目 */
@@ -119,14 +127,16 @@ export interface QueueItem {
   due: ISODate;
   retrievability: number;   // R 值（0~1），首页欠账排序用（§4.6③）
   moduleId: ModuleId;       // 交错抽取按板块去同（§4.6②）
-  isPriority: boolean;      // 重点卡优先（§4.5 高质量档）
+  isPriority: boolean;      // 重点卡优先（§4.5 高质量档自动升级；间隔更保守）
+  bookmarked: boolean;      // 用户收藏（D11）：仅抽取优先级加分，不改间隔策略
 }
 
 /** 一轮抽取：跨板块抽 5~8 张、按当日预算截断（§4.6② 节奏编织）。
- *  算法：R 升序为底序 → 同板块至多 2 张 → 截断到 budget → 一次只还 3~6 张（§2 欠账牵引）。 */
+ *  算法：R 升序为底序 → 同日到期时 bookmarked > isPriority > 普通（用户主动 > 系统自动，D11）
+ *  → 同板块至多 2 张 → 截断到 budget → 一次只还 3~6 张（§2 欠账牵引）。 */
 export function pickReviewBatch(items: QueueItem[], budget: number): QueueItem[];
 
-/** 当日预算（§4.6②）。V1 固定默认值，画像节奏画像可调（§5.1 B） */
+/** 当日预算（§4.6②）。V1 固定默认值，学习节奏画像可调（§5.1 B） */
 export interface DailyBudget { newCards: number; reviewCards: number }
 ```
 
@@ -134,7 +144,7 @@ export interface DailyBudget { newCards: number; reviewCards: number }
 
 ```ts
 /** 今日决策：首页"今天该学的一件事"。§5.6 驱动点表 + §6 回访第一屏三行。
- *  优先级：当日补讲 > 到期复习（R 最低优先）> 新学建议。端侧本地计算、离线即时渲染。 */
+ *  优先级（用户已裁决 D10，总控 §0.1）：到期复习（R 升序）> 当日补讲 > 新学建议。端侧本地计算、离线即时渲染。 */
 export type TodayDecision =
   | { kind: 'first_run' }                                          // 首启：方案 D 元课程小课（§6）
   | { kind: 'review'; batch: QueueItem[]; remediationCount: number } // 复习欠账优先
@@ -145,7 +155,7 @@ export type TodayDecision =
 export interface TodayPlan {
   dueCount: number;          // "复习 N 张到期卡"
   remediationCount: number;  // "补讲 X"
-  suggestion: TodayDecision; // "今天建议学的一条"
+  suggestion: Exclude<TodayDecision, { kind: 'first_run' }>; // "今天建议学的一条"（回访首屏不出现 first_run，F6 收窄）
   generatedAt: ISODate;      // 端侧生成时间（不进云侧前缀，§7.6）
 }
 ```
@@ -156,10 +166,12 @@ export interface TodayPlan {
 /** A. 学习事实层（原子级，§5.1） */
 export interface LearningFacts {
   answerEvents: AnswerRecord[];            // 逐条原子级（§5.4）
-  gradeEvents: GradeEvent[];               // 成绩事件（入口形态见待裁决 D4）
+  gradeEvents: GradeEvent[];               // 成绩事件（入口=拍照解析，D4：tools/grade-entry.ts；解析失败兜底手动录入）
   goals: Goal[];                           // 目标+期限+预估投入
 }
-/** 成绩事件（§5.1 A：科目、时间、总分、分项、错因四分类） */
+/** 成绩事件（§5.1 A：科目、时间、总分、分项、错因四分类）。
+ *  D4 入口链路：拍照 → 识图链路解析（tools/grade-entry.ts，M6）→ 端侧只存结构化数字
+ *  （§5.5 不存原图、不用于训练）→ GradeEvent 入库（ProfilePage 入口）；解析失败 → 手动录入兜底。 */
 export interface GradeEvent {
   id: string; subject: string; at: ISODate;
   total: number; sections: { name: string; score: number; full: number }[];
@@ -280,7 +292,7 @@ export interface ComponentPropsMap {
   MicButton: { hint: string };
   /** 快速/标准/高质量：播/停/倍速/重播（§7.3 TTS 覆盖四档） */
   TTSBar: { playing: boolean; rate: number; durationMs: number };
-  /** 复习/标准：对/模糊/错三档；按下反馈先行、判定异步补上（UID §5.4） */
+  /** 复习/标准：对/模糊/错三档；按下反馈先行、判定异步补上（UID §5.4）；判定对错到达时触发触觉（D1） */
   FeedbackBar: { grades: Grade[]; pendingJudge: boolean };
   /** 全站：点回出处原句（句子级 span；§4.3 硬门槛落点） */
   SourceLink: { aluId: AluId; sourceRef: SourceRef; label: string };
@@ -296,7 +308,7 @@ export interface ComponentPropsMap {
   SessionEndCard: { highlight: string; next: string | null };
 }
 
-/** catalog 声明项（注册表条手；JSON Schema 形态同步给云侧③段） */
+/** catalog 声明项（注册表条目；JSON Schema 形态同步给云侧③段） */
 export interface CatalogEntry {
   name: ComponentName;
   description: string;      // 何时上场（UID §四表格一句话）
@@ -313,7 +325,7 @@ export interface CatalogEntry {
 export interface SkillManifest {
   name: SkillName | KnowledgeSkillName;
   description: string;         // 何时用（SKILL.md frontmatter 原文；§7.8① description 写"何时用"）
-  version: string;             // 热更新预留（V1 内置，见待裁决 D3）
+  version: string;             // 版本号（热更新版本比对用；D3 通道见下方 SkillPackRemoteManifest/SkillUpdater）
   mode: 'pattern' | 'knowledge';   // 四模式档 vs 知识库（score-boost）
   promptTemplate: string;      // SKILL.md 正文 → 云侧上下文第④段（换档失效边界）
   tools: ToolName[];           // 所需工具声明（§7.2）
@@ -322,10 +334,11 @@ export interface SkillManifest {
   references?: string[];       // references/ 资源清单装载路径（搜索起始白名单，§4.4）
 }
 
-/** quick 两用切换参数（§3 档1：预算=长/目标=建立地图 vs 预算=90s/目标=唤醒） */
+/** quick 两用切换参数（§3 档1：预算=长/目标=建立地图 vs 预算=90s/目标=唤醒）。
+ *  PRD §7.2 技能包四要素中的"数据结构"不设 manifest 字段——ALU/消息等结构由全局契约承担（§1/§5），F13 注。 */
 export interface SkillParams {
   budgetMinutes?: [number, number];   // 时长预算区间
-  goal?: 'map' | 'recall' | 'understand' | 'master';
+  goal?: 'map' | 'recall';            // 收敛为 PRD §3 档1 两态（原 understand/master 为越界扩展，已删，F12）
   cardGeneration: boolean;            // 是否允许生成复习卡（硬规则1：quick=false）
 }
 
@@ -335,6 +348,28 @@ export interface SkillRuntime {
   loadBody(name: SkillName | KnowledgeSkillName): SkillManifest;  // 按需
 }
 export interface SkillSummary { name: string; description: string }
+
+/** ── 技能包热更新（用户裁决 D3：V1 就要；实现落点 src/skills/updater.ts）──
+ *  通道流程：远端 manifest（版本清单）→ 版本比对 → 拉包 → 校验（哈希/签名）→ 本地应用 → 失败回滚内置包。
+ *  端点 URL 可配置（AppSettings.skillUpdateManifestUrl）；开发期用本地 fixture 端到端验证，不依赖真实后端；
+ *  远端仅需静态托管（manifest JSON + 包文件），无需自建逻辑后端。
+ *  里程碑：M2 客户端协议实现 + fixture 验证；M6 真实端点联网联调（ARCHITECTURE §11/§13）。 */
+export interface SkillPackRemoteManifest {
+  packs: {
+    name: SkillName | KnowledgeSkillName;
+    version: string;              // 与内置 SkillManifest.version 比对
+    url: string;                  // 包文件下载地址（静态托管）
+    sha256: string;               // 完整性校验
+    signature?: string;           // 可选签名校验（公钥随端点配置）
+  }[];
+  generatedAt: ISODate;
+}
+export interface SkillUpdateEndpoint { manifestUrl: string; publicKey?: string }
+export type SkillUpdateResult = 'updated' | 'skipped' | 'rolled_back';
+export interface SkillUpdater {
+  /** 检查并应用更新；任一包校验/应用失败 → 整体回滚内置 packs，返回 'rolled_back' */
+  checkAndApply(endpoint: SkillUpdateEndpoint): Promise<SkillUpdateResult>;
+}
 
 /** 工具名（§7.3 注册表；offline 标注） */
 export type ToolName = 'web_search' | 'vision_capture' | 'tts_speak' | 'asr_transcribe';
@@ -360,7 +395,7 @@ export interface CloudRequest {
 
 export interface TaskInstruction {          // ⑥ 段结构化内容（序列化注入）
   aluIds: AluId[];                         // 今天学哪些 ALU
-  mode: SkillName | 'remediation';         // 档位（remediation=复习拉起的 90 秒补讲，§4.5）
+  mode: SkillName | 'remediation';         // 档位（remediation=复习 wrong 拉起的 90 秒补讲，§4.5；补讲子会话不发 session_start，见 §9 注——F7）
   params: SkillParams;                     // 深度/时长预算
   budget: DailyBudget;                     // 当日预算
   boundaries: string[];                    // 偏好边界硬约束（压缩保命清单②）
@@ -438,11 +473,12 @@ export interface SeedContentPack {
 ## 9. 四档会话事件流（src/domain/events.ts，PRD §3/§4.5/§5.2/§10）
 
 ```ts
-/** 会话生命周期事件（orchestrator 发、domain/storage 消费；埋点同源，§7.8④） */
+/** 会话生命周期事件（orchestrator 发、domain/storage 消费；埋点同源，§7.8④）。
+ *  注（F7）：补讲子会话仅发 remediation_start/remediation_done，不发独立 session_start（生命周期挂主会话）。 */
 export type SessionEvent =
   | { type: 'session_start'; sessionId: string; skill: SkillName; aluIds: AluId[]; params: SkillParams; at: ISODate }
   | { type: 'answer'; record: AnswerRecord }                                    // 作答（1s 撤销窗口内可补 revoked）
-  | { type: 'judge'; aluId: AluId; grade: Grade; fsrsApplied: boolean; at: ISODate } // 判定三档 + FSRS 是否已写
+  | { type: 'judge'; aluId: AluId; grade: Grade; fsrsApplied: boolean; prereqSuspect?: AluId[]; at: ISODate } // 判定三档 + FSRS 是否已写（fuzzy 恒 fsrsApplied=false，D8）；答错时沿依赖图上游追溯的前置嫌疑 ALU（§4.6② 前置归因，落点 domain/alu.ts tracePrereqSuspects，F1）
   | { type: 'difficulty_adjust'; aluId: AluId; direction: 'up' | 'down'; reason: string } // 实时调节（§10.1③：卡住先降难度给脚手架）
   | { type: 'remediation_start'; aluId: AluId; fromSkill: 'review' }            // 补讲拉起（硬规则3：复习失败→标准档90秒）
   | { type: 'remediation_done'; aluId: AluId; requeued: boolean }               // 补完重新入队（间隔按答错处理）
@@ -451,12 +487,13 @@ export type SessionEvent =
   | { type: 'skill_escalation'; signal: EscalationSignal; result: EscalationResult } // 卡死升级留痕
   | { type: 'session_end'; sessionId: string; trigger: SessionEndTrigger; analysis: SessionEndAnalysis; at: ISODate };
 
-/** 四档心流参数（§10.3 表；会话容器按档取用） */
+/** 四档心流参数（§10.3 表；会话容器按档取用）。
+ *  D9：复习档 sessionMinutes=[3,6]（PRD §3"一轮 3~6 分钟"）；§10.3 复习行"60~90s"系误植档1 值，已被用户裁决取代。 */
 export interface FlowParams {
   skill: SkillName;
   judgeLatencyTarget: '<1s' | '1-3s' | 'seconds';   // 判定反馈时延目标（按下反馈先行，判定异步补）
-  targetSuccessRate: number;                         // 交互层：快速0.90/复习0.85/标准0.80/深度0.75（与 FSRS 0.9 保持率是两套指标）
-  sessionMinutes: [number, number];                  // 单次时长区间
+  targetSuccessRate: number;                         // 交互层：快速0.90/复习0.85/标准0.80/深度0.75（深度为 PRD"70~80%"取区间中点单值，可配置；与 FSRS 0.9 保持率是两套指标，F16）
+  sessionMinutes: [number, number];                  // 单次时长区间（复习=[3,6]，D9）
   boundedSession: { closingLine: string };           // 有界会话："再3张清完今天"，不做开放结尾（§10.1①）
 }
 ```
@@ -477,7 +514,7 @@ export interface KVStore {
 export interface Collections {
   alu: Record<AluId, Alu>;                       // 主数据（种子+摄入）
   alu_state: Record<AluId, AluUserState>;
-  review_log: AnswerRecord[];                    // 追加式
+  review_log: AnswerRecord[];                    // 追加式；仅含 correct/wrong 判定（fuzzy 不落盘，D8）
   profile: LearnerProfile;
   session_summaries: SessionSummary[];
   settings: AppSettings;
@@ -490,7 +527,8 @@ export interface AppSettings {
   privacyAdaptive: boolean;        // 分级开关①"学习数据用于自适应"（§5.5）
   privacyCloudInference: boolean;  // 分级开关②"数据用于云端推理"（§5.5）
   cloudSync: boolean;              // 端云同步开关，默认 false（§7.4）
-  reduceMotion?: boolean;          // 系统"减少动态效果"（UID §7.4 降级档输入）
+  reduceMotion?: boolean;          // 系统"减少动态效果"（UID §7.4 降级档输入；静止档仍保留触觉，D1）
+  skillUpdateManifestUrl?: string; // 技能包热更新端点（D3）：manifest 地址，可配置；开发期指向本地 fixture
   ttsModelDownloaded?: boolean;    // 语音模型按需下载状态（§7.3）
 }
 ```
@@ -500,3 +538,4 @@ export interface AppSettings {
 | 日期 | 变更 | 依据 |
 |---|---|---|
 | 2026-10-15 | 初版（M1 产出） | PRD v1.3 / UID v3 / 总控方案 |
+| 2026-10-15 | M1.6 修订：D8 fuzzy 不再映射 Hard、不写 FSRS、不落 review_log（AnswerRecord 会话内留存+struggleWin）；D9 复习轮 sessionMinutes=[3,6]（§10.3 60~90s 标注误植）；D10 优先级改为复习>补讲>新学；D11 增 AluUserState.bookmarked + QueueItem.bookmarked 及抽取语义；D3 增热更新协议 SkillPackRemoteManifest/SkillUpdateEndpoint/SkillUpdater + AppSettings.skillUpdateManifestUrl；D4 GradeEvent 拍照解析链路；D1 FeedbackBar 触觉触发注；D5/D6 已裁决注；F1 judge 事件增 prereqSuspect；F6 suggestion 类型收窄；F7 补讲子会话事件注；F9 难度刻度映射；F12 goal 收敛为 map/recall；F13"数据结构"要素注；F16 深度成功率注明取中可配；F18 两处笔误修正 | 02_蓝图评审报告（F1~F18）+ 总控 §0.1（D1~D11） |

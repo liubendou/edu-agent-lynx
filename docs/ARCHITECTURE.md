@@ -11,7 +11,7 @@
 - 推理：云侧 DeepSeek API，默认 flash、卡死单次升 pro（§7.6），用户零配置。
 - 界面：A2UI（Google 发起、Lynx 4.0 官方 `@lynx-js/genui/a2ui` 渲染实现，v0.9 协议），Agent 流式产出 JSONL 片段，客户端渐进渲染（PRD §7.1）。
 - 数据：无账号、本地优先（§0）；一切学习数据端侧持久化，送云最小化（§7.4）。
-- 复用优先：FSRS→`ts-fsrs`；动效→`@lynx-js/motion`（mini）；手势/列表→`@lynx-js/lynx-ui-*`；语音→sherpa-onnx；A2UI→`@lynx-js/genui/a2ui`。自研仅：内容结构化（切分器+验收闸）、四档编排（Orchestrator）、技能包运行时。
+- 复用优先：FSRS→`ts-fsrs`；动效→`@lynx-js/motion`（mini）；手势/列表→`@lynx-js/lynx-ui-*`；语音→sherpa-onnx；A2UI→`@lynx-js/genui/a2ui`；触觉→`@sigx/lynx-haptics`（D1）。自研仅：内容结构化（切分器+验收闸）、四档编排（Orchestrator）、技能包运行时（含热更新客户端，D3）。
 
 ## 1. 目录结构（edu-agent/src 完整布局）
 
@@ -33,7 +33,7 @@ edu-agent/
 │   │   ├── tokens.css            # 语义 token 亮暗两套（ambient/surface/...）
 │   │   ├── typography.css        # 字阶/行高/字体栈（UID 1.1 排版表）
 │   │   ├── motion.css            # 动效曲线/时长 token（UID 附录参数表）
-│   │   └── theme.ts              # 降级三档判定（UID §7.4，后台线程切换）
+│   │   └── theme.ts              # 降级三档判定（UID §7.4，后台线程切换）；静止档仍保留触觉（D1）
 │   │
 │   ├── a2ui/                     # ── A2UI 层（PRD §7.1/§7.2；UID §四）
 │   │   ├── catalog.ts            # 16 零件 catalog：产品级全局常量 + JSON Schema（§7.2）
@@ -46,13 +46,14 @@ edu-agent/
 │   │   ├── ProgressRing.tsx ExplainStep.tsx  ChoiceGrid.tsx  MicButton.tsx
 │   │   ├── TTSBar.tsx     FeedbackBar.tsx  SourceLink.tsx  DueChip.tsx
 │   │   ├── TodayPlanPanel.tsx EntryCard.tsx StreamSkeleton.tsx SessionEndCard.tsx
+│   │   ├── haptics.ts            # 触觉封装（D1）：@sigx/lynx-haptics；吸附到位/判定对错两处触发
 │   │   └── primitives/           # 无样式 primitive（UID §四规则3）
 │   │
 │   ├── domain/                   # ── 端侧域层（纯 TS、无 UI/IO 依赖，可单测）
-│   │   ├── alu.ts                # ALU 实体 + 依赖图（§4.2）
-│   │   ├── fsrs.ts               # ts-fsrs 封装：三档→Rating 映射、目标保持率 0.9（§4.6）
-│   │   ├── queue.ts              # 复习队列：R 升序、交错抽取 5~8、当日预算（§4.6②）
-│   │   ├── decision.ts           # 今日决策：欠账 vs 补讲 vs 新学（§5.6）
+│   │   ├── alu.ts                # ALU 实体 + 依赖图 + 前置归因 tracePrereqSuspects（§4.2/§4.6②，F1）
+│   │   ├── fsrs.ts               # ts-fsrs 封装：correct/wrong→Rating 映射（fuzzy 不记账，D8）、保持率 0.9（§4.6）
+│   │   ├── queue.ts              # 复习队列：R 升序、交错抽取 5~8、当日预算、收藏优先（§4.6②，D11）
+│   │   ├── decision.ts           # 今日决策：到期复习（R 升序）> 当日补讲 > 新学（§5.6；优先级裁决 D10）
 │   │   ├── profile.ts            # 画像四层 + 三类触发（§5.1/§5.2）
 │   │   ├── session.ts            # 会话状态机（§4.5 三硬规则、§5.3 结束分析）
 │   │   └── events.ts             # 领域事件（四档会话事件流，见 CONTRACTS）
@@ -74,6 +75,7 @@ edu-agent/
 │   │
 │   ├── skills/                   # ── 技能包运行时（PRD §7.2）
 │   │   ├── runtime.ts            # 装载协议：name/description 常驻、正文按需（§7.8①）
+│   │   ├── updater.ts            # 热更新客户端（D3）：拉 manifest→版本比对→拉包→哈希/签名校验→应用→失败回滚内置包
 │   │   ├── registry.ts           # 技能包索引 + 分层路由（四档即四域，§7.8①）
 │   │   └── packs/                # 5 个技能包资产（源：/skill/ 只读，装载为 TS 资产）
 │   │       ├── quick-learning.ts  review.ts  standard-learning.ts
@@ -90,16 +92,17 @@ edu-agent/
 │   │   ├── registry.ts           # 工具注册表：白名单、限额、offline:true 标注
 │   │   ├── search.ts             # 联网搜索（sub-agent 隔离窗口，§7.7⑤）
 │   │   ├── vision.ts             # 识图（拍题/拍书页，sub-agent 窗口）
+│   │   ├── grade-entry.ts        # 成绩单拍照解析（D4）：拍照→识图链路→结构化数字入库（§5.5 不存原图）；失败兜底手动录入
 │   │   ├── tts.ts                # sherpa-onnx + Kokoro，端侧离线，模型按需下载
 │   │   └── asr.ts                # sherpa-onnx 流式 zipformer，仅档4 费曼，文字兜底
 │   │
 │   ├── storage/                  # ── 持久化（见 §9）
 │   │   ├── kv.ts                 # NativeModule 桥的 JS KV 封装（异步）
-│   │   └── repos/                # 仓库层：alu/state/review-log/profile/session/settings/gate
+│   │   └── repos/                # 仓库层：alu/state/review-log/profile/session/settings/gate/grayscale/budget（与 CONTRACTS §10 Collections 对齐）
 │   │
 │   ├── pages/                    # ── 页面（UID §2）
 │   │   ├── Home.tsx              # 条件式首屏：首启方案D / 回访今日计划面板 + 六卡流
-│   │   ├── Session.tsx           # 四档共用会话容器（A2UISurface 宿主）
+│   │   ├── Session.tsx           # 四档共用会话容器（A2UISurface 宿主；含会话进度细线局部组件，UID §三，不进 catalog，F10）
 │   │   ├── MapPage.tsx  LibraryPage.tsx  ProfilePage.tsx  GrowthPage.tsx
 │   │   └── hooks/                # useMainThreadRef/runOnBackground 封装等
 │   │
@@ -115,6 +118,7 @@ Lynx 双线程：主线程负责渲染与 UI 提交，后台线程跑 JS/React �
 | React 组件树、A2UI 运行时校验后向主线程提交 UI | 后台→主 | PRD §7.1（A2UI 协议消息后台解析、UI 更新主线程呈现） |
 | 手势即时反馈（按下缩放、跟手位移、弹簧吸附） | **主线程脚本**（`'main thread'` 指令 + `setStyleProperty`） | UID §5.1/§5.3：手感不能等后台线程 |
 | `@lynx-js/motion` 动画（MotionValue 数值驱动） | 主线程 | UID §7.1：可被打断的动画必须主线程数值驱动 |
+| 触觉触发（吸附到位/判定对错，`@sigx/lynx-haptics`，D1） | 主线程 | UID §九/§5.4：与跟手/按下反馈同帧给，不等后台；静止降级档仍保留（动效可关、触觉补位互补） |
 | Orchestrator 状态机、域层计算、FSRS、画像 | 后台线程 | PRD §7.2：调度器跑后台线程 |
 | 云侧请求/流式解析、工具调用、切分管线 | 后台线程 | PRD §7.1 |
 | 存储读写（KV 全量读写在原生侧完成） | 后台线程发起 | §7.7：回合边界批量落盘 |
@@ -138,9 +142,9 @@ Lynx 双线程：主线程负责渲染与 UI 提交，后台线程跑 JS/React �
 | domain | ALU/FSRS/队列/决策/画像/会话状态机：全部确定性计算，离线可跑 | 云侧调用、渲染 | PRD §4/§5 |
 | orchestrator | 今日决策驱动、Skill 确定性激活、会话循环 thought→action→observation、验证器回路、难度调节、调用率埋点 | 具体生成（交云侧） | PRD §5.6/§7.2/§7.7/§7.8/§10.1 |
 | cloud | DeepSeek 客户端、八段上下文拼装、压缩、卡死升级、成本护栏、Mock | 端侧数据计算 | PRD §7.6/§7.7 |
-| skills | 技能包装载协议、索引、5 包资产；name+description 常驻、正文按需 | 执行调度（交 orchestrator） | PRD §7.2/§7.8；总控 §0 |
+| skills | 技能包装载协议、索引、5 包资产、热更新客户端（D3）；name+description 常驻、正文按需 | 执行调度（交 orchestrator） | PRD §7.2/§7.8；总控 §0 |
 | pipeline | 切分器两层分流、验收闸三指标、抽样评审、种子内容包 | 运行时复习消费 | PRD §4.3/§9 |
-| tools | 搜索/识图/TTS/ASR 注册表与实现；白名单、限额、offline 标注 | 提示词决策 | PRD §7.3 |
+| tools | 搜索/识图/成绩单拍照解析（D4）/TTS/ASR 注册表与实现；白名单、限额、offline 标注 | 提示词决策 | PRD §7.3 |
 | storage | KV 桥 + 仓库层；回合边界批量落盘；1s 撤销窗口的延迟写入 | 业务语义 | PRD §7.4/§7.7；UID §三 |
 | pages | 六页面 + 条件式首屏 + 手势/主线程脚本 | 域计算 | PRD §6/§8；UID §2 |
 
@@ -156,7 +160,7 @@ Lynx 双线程：主线程负责渲染与 UI 提交，后台线程跑 JS/React �
 [TodayDecision]（domain/decision.ts，§5.6）
    输入：复习队列（R 升序）+ 补讲列表 + 能力画像 + 目标
    输出：TodayDecision = { review } | { remediation } | { new_learn } | { first_run }
-   优先级：当日补讲 > 到期复习（R 最低优先）> 新学建议
+   优先级：到期复习（R 升序）> 当日补讲 > 新学建议（用户已裁决 D10，总控 §0.1）
         ↓
 [SkillActivation]（orchestrator/activator.ts，§7.8③ 确定性激活）
    决策已定档 → 直接激活对应 Skill，不经模型选择；
@@ -180,9 +184,9 @@ Lynx 双线程：主线程负责渲染与 UI 提交，后台线程跑 JS/React �
 **四档流转状态机**（domain/session.ts，PRD §4.5）：ALU 产品状态 `未见 → 见过 → 学过一轮 → 暂记 → 已稳固`。三条硬规则由代码强制（§7.9"能硬约束就别用软提示"）：
 1. 快速档默认不产生复习欠账 → activator 对 quick 档禁用卡片生成 action。
 2. "学过→待复习"唯一入口 = 标准/高质量档讲完并自检过 → 只有 standard/deep 的会话事件能触发 `card_generated`。
-3. 复习失败自动拉起补讲 → review 档 `wrong/fuzzy` 判定 → 自动注入 remediation 子会话（standard 档 90 秒）→ 补完重新入队（间隔按答错处理）。
+3. 复习失败自动拉起补讲 → review 档 `wrong` 判定 → 写 FSRS Again 并自动注入 remediation 子会话（standard 档 90 秒）→ 补完重新入队（间隔按答错处理）。`fuzzy` 判定不记账（用户裁决 D8，UID §5.4 口径）：不写 FSRS、不进复习日志，只触发"再讲一遍"脚手架，该卡本轮稍后重现、不产生新欠账（会话内 AnswerRecord 仍记，供"模糊→对"正反馈判定与埋点）。
 
-**产品 status 与 FSRS State 映射**：未见/见过=`New`（见过不入队，硬规则1）；学过一轮=入队 `Learning→Review`，due=T+1；暂记=`Review` 且近期有 lapse；已稳固=`Review` 且 `scheduled_days ≥ 21`（建议初值，可调参数，见待裁决 D5）。
+**产品 status 与 FSRS State 映射**：未见/见过=`New`（见过不入队，硬规则1）；学过一轮=入队 `Learning→Review`，due=T+1；暂记=`Review` 且近期有 lapse；已稳固=`Review` 且 `scheduled_days ≥ 21`（D5 已按总控 §0.1 默认执行：技术默认值，参数化可调）。
 
 ## 5. 上下文组装（PRD §7.7）
 
@@ -201,7 +205,7 @@ Lynx 双线程：主线程负责渲染与 UI 提交，后台线程跑 JS/React �
 
 要点落法：①②③ 为字节级固定前缀，吃 DeepSeek 上下文硬盘缓存（§7.6）；窗口内用标签分段 `<skill> <memory> <alu> <catalog>`（§7.7⑥）；可寻址引用（`alu-id + 出处 + 句子级 span`）代替原文粘贴（§7.7③）。
 
-**压缩**（compressor.ts，§7.7④）：必须保住 ①当前目标 ②用户约束（偏好边界）③未完成步骤 ④关键引用（alu-id+出处）⑤未解决错误原文；可丢久远对话与已完成回合；**只动第④段之后，绝不改缓存前缀**。
+**压缩**（compressor.ts，§7.7④）：必须保住 ①当前目标 ②用户约束（偏好边界）③未完成步骤 ④关键引用（alu-id+出处）⑤未解决错误原文；可丢久远对话与已完成回合；**只压缩④~⑧段，①②③缓存前缀绝不改写**（④为当前档 Skill 模板，会话内本就不变，换档才整体失效——见 §5 段表）。
 
 **三个 sub-agent 隔离窗口**（§7.7⑤）：切分器/识图/搜索各自独立 ContextWindow（互不共享、不进主窗）；只回传结构化结论（ALU JSON / OCR+ALU / 提炼要点+出处）。
 
@@ -219,7 +223,7 @@ Lynx 双线程：主线程负责渲染与 UI 提交，后台线程跑 JS/React �
 ## 7. 模型路由（PRD §7.6）
 
 `cloud/client.ts + escalation.ts + budget.ts`：
-- 默认 `deepseek-v4.1-flash`（PRD 模型名，实际 API 模型名以 M2 接入时核实为准，做成配置常量，见待裁决 D2）。
+- 默认 `deepseek-v4.1-flash`（PRD 模型名；做成配置常量——D2 已裁决：Key 到位后核实实际 API 模型名，届时只改常量，不影响架构）。
 - 卡死升级（学 Trae Advisor）：五类触发信号（同义重试不收敛/工具连续失败/输出反复偏离/用户明显不满或纠错/模型自评低置信）→ 向 pro 发**一次**请求（上下文最小化：只带"卡在哪+目标"）→ 拿到"下一步怎么做"即切回 flash 执行。**每次卡死只升一次**；升级与结果记入画像学习事实层（"这个点在 Flash 上卡过"）。
 - 成本护栏：用户 token 日预算 + 升级配额（budget.ts 计数持久化）；非实时任务（批量切卡、批量评审）调度到闲时（sampler.ts 挂闲时队列）。
 
@@ -243,7 +247,7 @@ Lynx 双线程：主线程负责渲染与 UI 提交，后台线程跑 JS/React �
    - 可追溯率 **100% 硬门槛**：程序化逐卡校验——每卡 `出处文件 + 句子级 span` 回链存在且原文可命中（`source.text` 在 `source.doc` 指定句区间内命中）；不达标者隔离、不入复习队列（`isolated` 状态）。
    - 可判对错率 ≥90% / 颗粒度合格率 ≥85%：抽样（每批分层抽 100~200 张），LLM 评审规则 + ≥20% 人工抽检，闲时调度。
    - 灰度判定：连续两批达标→扩大灰度；任一未达标→退回种子内容模式（Agent 只做装配与变式，不做自动切分）。
-3. **回链不自研**：创建 ALU 即写入出处+span，用现成 citation/span-anchor 思路的字符串区间命中实现。
+3. **回链**：创建 ALU 即写入出处+span，用 citation/span-anchor 思路的字符串区间命中实现（经核实 npm 生态无可直接依赖的现成实现，故按该思路以最小代码自实现——与 PRD §4.3"复用现成实现"字面的差异在此留痕，F11）。
 4. 搜索/识图摄入的 ALU 走**同一条闸**（§9 风险口径）。
 5. 种子内容包（seeds/）：首启元课程（学习科学）+ 心理学研究方法 ALU，M5 以人工校验后的种子集形态内置（"人机分工"缓解 §9 首败风险）。
 
@@ -270,7 +274,7 @@ Skill（云侧，受提示词约束）
 - **装载**：`/skill/` 下 5 个 SKILL.md 为只读源；构建期装载为 `skills/packs/*.ts`（SkillManifest + 提示词模板字符串 + references 原文）。格式定义见 CONTRACTS §6。
 - **与 catalog 关系**：manifest 的 `components` 字段按名引用 catalog（§7.2），禁止内嵌目录副本——避免按档复制 catalog 打散缓存前缀。
 - **score-boost 特殊角色**（总控 §0）：mode=`knowledge`，不参与四档调度；其方法论拆为三处注入：②段心理学策略库要点（稳定前缀）、⑤段画像相关片段（按需）、⑧段按需检索（错因四分类/提分闭环等，用于会话结束分析与定向补漏，§5.6）。
-- **分包/热更新预留**：V1 技能包打进应用包（本地常量资产）；`SkillManifest` 含 `version` 字段，热更新走云端 JSON 下发通道为 **V1.x 预留**（见待裁决 D3）。
+- **热更新（用户裁决 D3：V1 就要）**：V1 技能包打进应用包为内置兜底；`skills/updater.ts` 实现云端下发通道**客户端全量能力**——**远端 manifest（版本清单）→ 版本比对 → 拉包 → 校验（哈希/签名）→ 本地应用 → 失败回滚内置包**。端点 URL 可配置（AppSettings.skillUpdateManifestUrl）；开发期用本地 fixture 端到端验证，不依赖真实后端；远端仅需**静态托管**（manifest JSON + 包文件），无需自建逻辑后端。协议类型见 CONTRACTS §6（SkillPackRemoteManifest/SkillUpdateEndpoint/SkillUpdater）。归属里程碑：**M2 实现客户端协议与 fixture 验证；M6 真实端点联网联调**（与网络工具同期，复用真机/联网环境）。
 
 ## 12. 依赖选型
 
@@ -285,7 +289,7 @@ Skill（云侧，受提示词约束）
 | TTS | sherpa-onnx + Kokoro（中文优先，Apache-2.0），Piper 英文备选 | PRD §7.3；模型按需下载、不进 APK |
 | ASR | sherpa-onnx 流式 zipformer | 仅档4 费曼 + 文字兜底；质量不得阻塞 V1 |
 | 云侧 API | 原生 `fetch`（DeepSeek OpenAI 兼容接口） | 不引 SDK，减依赖；Key 只进本地配置不进代码库（总控 §0） |
-| 触觉 | 不引入（V1.x 候选 `@sigx/lynx-haptics`） | UID §九开放问题，见待裁决 D1 |
+| 触觉 | `@sigx/lynx-haptics`（映射 Android `Vibrator`/`VibrationEffect`） | D1 已裁决：加。两处触发——卡片吸附到位、判定对错；与"减少动态效果"开关互补（UID §九）：静止档关位移仍保留触觉；真机适配列风险 R6 |
 
 **存储方案（已用 WebSearch 核实）**：Lynx **无内置磁盘持久化 API**——内置仅会话级 SessionStorage（`lynx.setSessionStorageItem` 等）；官方《原生模块-本地持久存储》指南即教学用 Native Module 承接（Android=SharedPreferences）。候选与推荐：
 
@@ -301,22 +305,16 @@ Skill（云侧，受提示词约束）
 
 | 里程碑 | 对应模块（上文目录） |
 |---|---|
-| M2 核心域层 | domain/*、storage/*（kv+repos）、orchestrator/*（状态机+激活+校验）、design-system/*、cloud/*（client+builder+mock）、skills/*（runtime+5 packs）；随附单元测试 |
+| M2 核心域层 | domain/*、storage/*（kv+repos）、orchestrator/*（状态机+激活+校验）、design-system/*、cloud/*（client+builder+mock）、skills/*（runtime+registry+5 packs+updater 热更新客户端，本地 fixture 验证）；随附单元测试 |
 | M3 A2UI 组件库 | a2ui/*（catalog+surface+stream-parser+fallback）、components/*（16 零件+primitives）、design-system 动效参数对齐 UID 附录 |
 | M4 页面与会话 | pages/*（六页面+条件式首屏+四档会话容器）、手势与主线程脚本（UID §五/§六）、pages/hooks |
 | M5 内容管线 | pipeline/*（splitter+gate+sampler）、pipeline/seeds（首启元课程+心理学种子 ALU） |
-| M6 工具与语音 | tools/*（registry+search+vision+tts+asr）、android/modules/SpeechModule、模型按需下载 |
-| M7 集成验收 | 首启方案 D 全链路、Trace 验收（红橙帧<3%、P95<16.7ms、0.5s 首屏、中低端机实测）、可安装 APK、metrics 评测集（含负例） |
+| M6 工具与语音 | tools/*（registry+search+vision+grade-entry+tts+asr）、android/modules/SpeechModule、模型按需下载、触觉两处触发（D1，components/haptics.ts 接线）、成绩单拍照解析（D4，grade-entry+ProfilePage 入口）、技能包热更新真实端点联调（D3） |
+| M7 集成验收 | 首启方案 D 全链路、Trace 验收（红橙帧<3%、P95<16.7ms、0.5s 首屏、冷启动中端机≤1.5s、帧间隔方差单列、中低端机实测——UID §7.3 全量口径，F8）、可安装 APK、metrics 评测集（含负例） |
 
-## 14. 待裁决清单（不自行拍板，提请用户/总控裁决）
+## 14. 裁决状态（原待裁决清单）
 
-- **D1 触觉反馈**：UID §九明确留白"要不要加"（`@sigx/lynx-haptics`，吸附到位/判定对错两处）。本蓝图 V1 不引入，列为 V1.x 候选。请用户拍板。
-- **D2 DeepSeek 实际模型名**：PRD §7.6 写 `deepseek-v4.1-flash` / `deepseek-v4-pro`；实际 API 模型名（如 deepseek-chat/deepseek-reasoner 或新版本名）需在 Key 到位后核实。云侧做成配置常量，不影响架构。
-- **D3 技能包热更新通道**：PRD §7.2"可动态加载、支持热更新不发版"。Lynx 分包/动态加载面向页面模板；提示词资产热更新需自建云端配置下发。V1 建议：技能包内置 + version 字段预留；热更新列 V1.x。请确认。
-- **D4 成绩单解析入口**：PRD §5.1/§5.2 含"发成绩单"事件与"端侧解析存结构化数字"；§8 V1 范围第 3 条未明确该入口形态。识图工具（M6）可承接拍照解析；或 V1 先手动录入结构化字段。契约已含 GradeEvent 类型，两种入口均可接。请拍板 V1 形态。
-- **D5 "已稳固"阈值**：PRD §4.2 状态链未定义"已稳固"判定值。本蓝图建议 `Review 态且 scheduled_days ≥ 21`，参数化可调。请确认或给值。
-- **D6 FSRS 个人参数切换**：PRD §4.6"积累足够复习记录后切换到个人参数"。ts-fsrs 不含 optimizer（参数优化在 py-fsrs/fsrs-rs 生态）。V1 建议全体用户共用默认参数（w 常量），个人参数优化管线列 V1.x。请确认。
-- **D7 内置 Key 分发安全**：App 直连 DeepSeek（总控：用户提供测试 Key、只进本地配置）。正式分发时内置 Key 存在被提取风险；PRD §7.6 提及"App 后端单账户代理"可最大化缓存命中并隐藏 Key，但属自建后端。V1 按直连，代理列为发布前决策项。
+D1~D11 已于 2026-10-15 由用户全部拍板（总控 §0.1），本蓝图已按裁决完成修订（M1.6），不再有开放裁决项。逐条结论与落点索引见 §16 决策记录；原议题的矛盾与留白背景见 `02_蓝图评审报告.md` 与总控 §0.1。
 
 ## 15. 自查发现的风险（架构层面）
 
@@ -325,3 +323,20 @@ Skill（云侧，受提示词约束）
 - **R3**：SharedPreferences 存集合 JSON 在数据增长后有全量读开销；V1 量级可控 + 回合边界批量写已缓解；万级以上需迁移 SQLite（候选 C）。
 - **R4**：sherpa-onnx 与 Lynx Android 宿主集成复杂度（总控风险登记已有）；TTS 阻塞四档口播体验，M6 需优先打通最小链路。
 - **R5**：验收闸"可判对错率/颗粒度合格率"依赖 LLM 评审 + 人工抽检，人工环节在无用户参与的开发期由总控/评审子智能体代行，需在 M5 验收时明确责任人。
+- **R6**：`@sigx/lynx-haptics` 为社区包（D1 引入），真机振动适配（Vibrator/VibrationEffect 机型差异）需 M6 实测；若不可用则降级为无触觉，不阻塞其他功能（触觉非唯一信息通道，UID §六）。
+
+## 16. 决策记录（D1~D11，2026-10-15 用户裁决，总控 §0.1）
+
+| # | 结论 | 蓝图落点 |
+|---|---|---|
+| D1 | 触觉：加（吸附到位、判定对错两处，@sigx/lynx-haptics） | §12 依赖表、§2 线程表、components/haptics.ts、theme.ts（静止档保留触觉）、CONTRACTS §5 FeedbackBar 注、M6 接线、风险 R6 |
+| D2 | 模型名做成配置常量，Key 到位后核实 | §7、cloud/client.ts；默认按 PRD 名 |
+| D3 | 技能包热更新 V1 就要 | §11、skills/updater.ts、CONTRACTS §6 协议（SkillPackRemoteManifest 等）、AppSettings.skillUpdateManifestUrl；M2 协议+fixture / M6 联网联调；静态托管即可 |
+| D4 | 成绩单拍照解析（不存原图），失败兜底手动录入 | tools/grade-entry.ts + ProfilePage 入口、CONTRACTS §4 GradeEvent 注、M6 |
+| D5 | 已稳固阈值：技术默认 scheduled_days≥21、参数化可调 | §4、CONTRACTS §1 映射注（已按总控 §0.1 默认执行） |
+| D6 | FSRS V1 共用默认参数，个人参数优化列 V1.x | domain/fsrs.ts、CONTRACTS §2 注（已按总控 §0.1 默认执行） |
+| D7 | V1 直连 DeepSeek（测试 Key 本地配置），代理列发布前决策 | §6 端云边界、cloud/client.ts（已按总控 §0.1 默认执行） |
+| D8 | "模糊"不记账（UID 口径）：不写 FSRS/不进复习日志；会话内记 AnswerRecord；触发"再讲一遍"，该卡本轮稍后重现 | §4 硬规则3、CONTRACTS §2 gradeToRating/AnswerRecord/review_log 注 |
+| D9 | 复习轮 3~6 分钟（PRD §3）；§10.3 的 60~90s 判为误植档1 值 | CONTRACTS §9 FlowParams 注 |
+| D10 | 今日决策优先级：到期复习（R 升序）> 当日补讲 > 新学建议 | §4 TodayDecision、CONTRACTS §3 注 |
+| D11 | 收藏入口：会话卡片"标记重点"+ 资料库列表操作，均可取消 | CONTRACTS §1 AluUserState.bookmarked + §2 QueueItem 抽取语义、pages/Session + LibraryPage |
