@@ -1,0 +1,5 @@
+build/
+# 前端构建产物（copyBundle 任务自动拷入，勿提交）
+src/main/assets/main.lynx.bundle
+src/main/assets/static/
+src/main/assets/async/
