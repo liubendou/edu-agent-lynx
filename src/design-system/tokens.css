@@ -1,0 +1,60 @@
+/*
+ * tokens.css —— "纸与墨"设计系统 · 语义 token（UID §1.1 颜色表 + 附录间距/圆角）
+ * M2b 2026-10-15。数值一律照抄 UID，未给值处已注明补位依据。
+ *
+ * 亮暗切换机制（M2b 查证结论，2026-10-15）：
+ * 1. Lynx 支持 CSS 变量（官方 css-variable 文档：定义在祖先节点，后代以 var(--*) 引用）。
+ * 2. @media (prefers-color-scheme) 在 Lynx ≥ 4.0 语法可解析，但引擎本身不跟踪系统主题
+ *    （默认恒为 light），需宿主 native 侧接线才会跟随（社区 @sigx/lynx-appearance 即做此
+ *    wiring，不在本工程依赖锁定清单 docs/04 中）。故不走 CSS media query。
+ * 3. 采用官方 Theming 指南的 TS 侧方案：宿主经 Lynx SDK 写 lynx.__globalProps.appTheme
+ *    （JS 侧只读；每次更新触发 onGlobalPropsChanged 并整页重渲染），前端根节点切换
+ *    .theme-light / .theme-dark class，即本文件的两套变量值。读取见 theme.ts readColorScheme()。
+ *
+ * 用法：根节点同时挂 "design-tokens theme-light"（或 theme-dark），后代用 var(--token)。
+ */
+
+/* ── 主题无关 token：间距栅格 / 圆角（UID 附录）── */
+.design-tokens {
+  /* 间距栅格 4 / 8 / 12 / 16 / 24 / 32（4px 基数，按倍数命名） */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* 圆角 8（小控件）/ 12（卡片）/ 16（会话容器）/ 999（胶囊） */
+  --radius-s: 8px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+  --radius-pill: 999px;
+}
+
+/* ── 亮色（纸）── UID §1.1 颜色表，逐字照抄 */
+.theme-light {
+  --ambient: #F6F3EC;   /* 底：暖纸 */
+  --surface: #FDFBF6;   /* 卡片面 */
+  --faint: #E4DED2;     /* 描边：分隔线、卡片边 */
+  --veil: rgba(34, 29, 24, 0.40); /* 遮罩层。UID 未给值，蓝图补位：取 ink 色调（#221D18）40% 透明压在暖纸底上 */
+  --ink: #221D18;       /* 主文字：墨，不用纯黑 */
+  --ink-soft: #6B6259;  /* 次文字：出处、说明 */
+  --accent: #2E4A6E;    /* 主色：钢笔墨水的靛。只用在"当前这一件事"，不做大面积填充 */
+  --good: #3E6B4C;      /* 对：松绿（纯绿压米底发闷，往松调） */
+  --warn: #A5761F;      /* 模糊：赭黄 */
+  --bad: #A5402F;       /* 错：砖红（红留给"错"，主色不用红） */
+}
+
+/* ── 暗色（同一套设计的低亮度版本，非另做一套）── UID §1.1 暗色列，逐字照抄 */
+.theme-dark {
+  --ambient: #17140F;   /* 底：暖黑，不用纯黑（纯黑边上浮不起层级，也费眼） */
+  --surface: #221D16;   /* 卡片面 */
+  --faint: #332C22;     /* 描边 */
+  --veil: rgba(0, 0, 0, 0.55); /* 遮罩层。UID 未给值，蓝图补位：暗底上遮罩需更重才能区分层级，取纯黑 55% */
+  --ink: #EDE7DC;       /* 主文字：暖白，不用纯白 */
+  --ink-soft: #A69C8D;  /* 次文字 */
+  --accent: #7FA0C8;    /* 主色：提亮降饱和（高饱和色压暗底会"振动"，Material 暗色规范结论） */
+  --good: #7FAE8C;      /* 对 */
+  --warn: #CFA152;      /* 模糊 */
+  --bad: #D07A69;       /* 错 */
+}
