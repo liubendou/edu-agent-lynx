@@ -10,7 +10,7 @@ import {
 } from 'ts-fsrs';
 
 test('ts-fsrs generatorParameters(0.9) returns FSRS-6 default weights', () => {
-  const params = generatorParameters(0.9);
+  const params = generatorParameters({ request_retention: 0.9 });
   expect(params.request_retention).toBe(0.9);
   expect(Array.isArray(params.w)).toBe(true);
   expect(params.w).toHaveLength(21);
@@ -30,7 +30,7 @@ test('ts-fsrs Rating/State enums match domain mapping assumptions', () => {
 });
 
 test('ts-fsrs fsrs() schedules a new card (RecordLog keyed by Rating)', () => {
-  const f = fsrs(generatorParameters(0.9));
+  const f = fsrs(generatorParameters({ request_retention: 0.9 }));
   const now = new Date('2026-10-15T00:00:00.000Z');
   const card = createEmptyCard(now);
   expect(card.state).toBe(State.New);
