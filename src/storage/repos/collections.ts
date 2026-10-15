@@ -37,6 +37,8 @@ export interface Collections {
   gate_reports: Record<string, GateReport>;
   grayscale: GrayscaleState;
   budget: BudgetState;
+  /** M2d 追加（D3 热更新）：独立 skill_packs 集合。可选——无热更新时集合为空，runtime 走内置包兜底。 */
+  skill_packs?: Record<string, InstalledSkillPack>;
 }
 
 export interface AppSettings {
@@ -54,3 +56,30 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   privacyCloudInference: true,
   cloudSync: false,
 };
+
+/* ─────────────────────────────────────────────────────────────
+ * M2d 追加（D3 技能包热更新）：独立 skill_packs 集合。
+ * 仅为追加声明——既有 9 集合（alu…budget）与 Repositories 聚合类均未改动；
+ * 本集合不进 saveAll/loadAll 批量落盘，由 src/skills/updater.ts 单点管理
+ * （先全部校验通过再整体原子写，任一失败回滚到应用前快照，内置包兜底），
+ * 读取方为 src/skills/runtime.ts hydrateFromStorage（冷启动装配"热更新已应用包 > 内置包"）。
+ * ───────────────────────────────────────────────────────────── */
+
+/** skill_packs 集合存储 key（与 common.ts COLLECTION_KEYS 同一命名空间约定；独立声明以免改动既有文件）。 */
+export const SKILL_PACKS_KEY = 'edu:col:skill_packs';
+
+/** 已应用热更新包记录：字段与 CONTRACTS §6 SkillManifest 对齐（用宽类型 string，避免 storage 反向依赖 skills）+ 应用元数据。 */
+export interface InstalledSkillPack {
+  name: string;
+  description: string;
+  version: string;
+  mode: 'pattern' | 'knowledge';
+  promptTemplate: string;
+  tools: string[];
+  components: string[];
+  params?: { budgetMinutes?: [number, number]; goal?: 'map' | 'recall'; cardGeneration: boolean };
+  references?: string[];
+  referenceContents?: Record<string, string>;   // 远端包可携带 references 原文；缺省回落内置 reference 内容
+  sha256: string;                               // 应用时通过校验的清单哈希（审计留痕）
+  appliedAt: string;                            // 应用时间（ISODate）
+}
