@@ -9,7 +9,16 @@
     "test": "rstest run"
   },
   "dependencies": {
-    "@lynx-js/react": "^0.126.2"
+    "@lynx-js/genui": "0.6.0",
+    "@lynx-js/lynx-ui": "3.140.0",
+    "@lynx-js/lynx-ui-draggable": "3.140.0",
+    "@lynx-js/lynx-ui-feed-list": "3.139.0",
+    "@lynx-js/lynx-ui-swiper": "3.139.0",
+    "@lynx-js/motion": "0.0.7",
+    "@lynx-js/react": "^0.126.2",
+    "@sigx/lynx-core": "0.35.0",
+    "@sigx/lynx-haptics": "0.35.0",
+    "ts-fsrs": "5.4.2"
   },
   "devDependencies": {
     "@lynx-js/preact-devtools": "^5.0.1-20260827072047-5f77e12",
