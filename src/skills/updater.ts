@@ -14,6 +14,7 @@ import { COLLECTION_KEYS, createJsonCollection } from '../storage/repos/common';
 import { BUILT_IN_PACK_MAP } from './packs';
 import type { OverridePack } from './runtime';
 import { compareVersions } from './runtime';
+import { detectNativeDigest } from '../storage/digest';
 
 /** 远端 manifest：版本清单（CONTRACTS §6 逐字；远端静态托管的 JSON）。 */
 export interface SkillPackRemoteManifest {
@@ -71,11 +72,19 @@ const VALID_COMPONENTS: ReadonlySet<string> = new Set([
   'SourceLink', 'DueChip', 'TodayPlanPanel', 'EntryCard', 'StreamSkeleton', 'SessionEndCard',
 ]);
 
-/** 文本哈希（sha256 hex）。能力探测 + 降级：
- *  Web Crypto subtle.digest（Lynx 真机可用性 M6 核实）不可用时降级为"长度+FNV-1a 校验和"弱摘要。
- *  注意：降级摘要与远端 sha256 永不相等 → 校验必然失败 → fail-closed 拒用热更新、内置包兜底
- *  （宁可拒更新也不放行无法强校验的包；若 M6 核实真机无 subtle，再走协议变更让服务端提供降级校验字段）。 */
+/** 文本哈希（sha256 hex）。三级路径（M6 落定）：
+ *  ① 原生桥 NativeModules.StorageModule.digestSha256Hex（Lynx 真机主路径——M6 核实：
+ *     lynxjs.org/next/llms.txt §18 后台线程 API 清单无 Web Crypto，crypto.subtle 不可依赖）；
+ *  ② crypto.subtle（Node 测试 / web 预览可用即用）；
+ *  ③ "长度+FNV-1a" 弱摘要 fail-closed 兜底：与远端 sha256 永不相等 → 校验必然失败 →
+ *     拒用热更新、内置包兜底（宁可拒更新也不放行无法强校验的包）。 */
 export async function hashHex(text: string): Promise<string> {
+  try {
+    const native = detectNativeDigest();
+    if (native !== null) return await native(text);
+  } catch {
+    // 原生桥调用失败 → 落到 subtle/弱摘要
+  }
   try {
     const subtle = (globalThis as unknown as { crypto?: { subtle?: { digest(algo: string, data: Uint8Array): Promise<ArrayBuffer> } } }).crypto?.subtle;
     if (subtle !== undefined) {

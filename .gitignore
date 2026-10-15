@@ -16,3 +16,6 @@ dist/
 
 # TypeScript
 *.tsbuildinfo
+
+# M6：sherpa-onnx AAR（50MB 二进制不入库；下载命令见 android/app/build.gradle.kts 头注）
+android/app/libs/*.aar

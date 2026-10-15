@@ -1,3 +1,7 @@
+// 前置：sherpa-onnx AAR 需手动放 libs/（50MB 二进制不入 git）：
+//   mkdir -p android/app/libs && curl -L -o android/app/libs/sherpa-onnx-1.13.8.aar \
+//     https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
@@ -30,6 +34,11 @@ android {
     }
     kotlinOptions {
         jvmTarget = "1.8"
+    }
+
+    // M6：@sigx/lynx-haptics 原生模块源码随包分发（node_modules），srcDirs 挂入编译（触觉真绑定 D1）
+    sourceSets.getByName("main") {
+        java.srcDir(file("../../node_modules/@sigx/lynx-haptics/android"))
     }
 }
 
@@ -64,6 +73,14 @@ dependencies {
     implementation("org.lynxsdk.lynx:xelement-svg:4.1.0")
     implementation("org.lynxsdk.lynx:servalsvg:0.0.2")
     implementation("org.lynxsdk.lynx:xelement-refresh:4.1.0")
+
+    // M6：sherpa-onnx 端侧语音（TTS Kokoro + 流式 zipformer ASR；AAR 来自官方 release v1.13.8，
+    // libs/ 直依赖避免 JitPack 构建排队）。模型文件不入 APK，首次使用经 SpeechModule 下载到 app 私有目录
+    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
+    // M6：模型 tar.bz2 解压（commons-compress 纯 Java bzip2/tar）
+    implementation("org.apache.commons:commons-compress:1.26.2")
+    // M6/D4：FileProvider（拍照临时文件）
+    implementation("androidx.core:core:1.12.0")
 }
 
 // 把前端构建产物（edu-agent/dist/）拷入 app assets，先在工程根执行 `npm run build`

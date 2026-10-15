@@ -1,7 +1,9 @@
 package com.eduagent.app
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
+import com.eduagent.app.modules.CameraModule
 import com.lynx.tasm.LynxView
 import com.lynx.tasm.LynxViewBuilder
 import com.lynx.xelement.XElementBehaviors
@@ -34,6 +36,12 @@ class MainActivity : Activity() {
     override fun onPause() {
         lynxView?.onEnterBackground()
         super.onPause()
+    }
+
+    /** 拍照结果转发（CameraModule FileProvider 临时文件 → base64 data URL，M6/D4）。 */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        CameraModule.instance?.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun onDestroy() {

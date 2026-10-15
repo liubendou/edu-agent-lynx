@@ -6,9 +6,11 @@
  *
  * 门控：tierParams(resolveThemeTier(signals)).haptics（theme.ts）——三档全保留触觉
  * （D1：动效可关、触觉补位互补），门控为结构性占位，未来档位表调整即生效。
- * 后端可注入（测试断言调用点/参数）；缺省 @sigx/lynx-haptics——宿主无 Haptics 模块
+ * 后端可注入（测试断言调用点/参数）；缺省 @sigx/lynx-haptics 真实现（M6 绑定确认）——
+ * JS 侧 impact/notification/selection 与包 API 逐字对齐；宿主无 Haptics 模块
  * （web 预览/未捆绑构建）静默 no-op 绝不抛错（包内保证）。
- * M4 无真机验证手段，触觉手感与档位联动 M7 真机回归。
+ * M6 已在 Android 宿主注册原生 HapticsModule（EduAgentApplication + gradle srcDirs 指向
+ * node_modules/@sigx/lynx-haptics/android + VIBRATE 权限），真机手感与档位联动 M7 回归。
  */
 import { Haptics, type ImpactStyle, type NotificationType } from '@sigx/lynx-haptics';
 import { resolveThemeTier, tierParams, type TierSignals } from '../design-system/theme';

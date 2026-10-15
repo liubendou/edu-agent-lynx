@@ -15,6 +15,8 @@ import com.lynx.service.log.LynxLogService
 import com.lynx.tasm.LynxEnv
 import com.lynx.tasm.service.LynxServiceCenter
 import com.lynx.service.http.LynxHttpService
+import com.eduagent.app.modules.CameraModule
+import com.eduagent.app.modules.SpeechModule
 import com.eduagent.app.modules.StorageModule
 
 class EduAgentApplication : Application() {
@@ -51,6 +53,11 @@ class EduAgentApplication : Application() {
 
         // 注册原生模块：JS 侧通过 NativeModules.StorageModule 调用（ARCHITECTURE §12 存储方案）
         LynxEnv.inst().registerModule("StorageModule", StorageModule::class.java)
+        // M6：语音桥（sherpa-onnx TTS/ASR + 模型按需下载）与拍照桥（ACTION_IMAGE_CAPTURE，D4）
+        LynxEnv.inst().registerModule("SpeechModule", SpeechModule::class.java)
+        LynxEnv.inst().registerModule("CameraModule", CameraModule::class.java)
+        // M6：触觉真绑定（@sigx/lynx-haptics 原生模块，Kotlin 源经 gradle srcDirs 指向 node_modules 编译）
+        LynxEnv.inst().registerModule("Haptics", com.sigx.haptics.HapticsModule::class.java)
 
         // DevTool OpenCard：扫码/输入 URL 时打开 DebugActivity
         val mainHandler = Handler(Looper.getMainLooper())

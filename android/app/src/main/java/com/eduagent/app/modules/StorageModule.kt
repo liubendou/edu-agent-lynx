@@ -43,6 +43,21 @@ class StorageModule(context: Context) : LynxModule(context) {
         callback.invoke(ArrayList(prefs().all.keys))
     }
 
+    /**
+     * sha256 摘要（M6/D3 追加，skills/updater.ts hashHex 的真机主路径——Lynx 后台线程无
+     * Web Crypto，llms.txt §18 已核实）。hex 为 64 字符小写；失败回调 null（JS 侧降级）。
+     */
+    @LynxMethod
+    fun digestSha256Hex(text: String, callback: Callback) {
+        try {
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(text.toByteArray(Charsets.UTF_8))
+            callback.invoke(digest.joinToString("") { "%02x".format(it) })
+        } catch (e: Exception) {
+            callback.invoke(null)
+        }
+    }
+
     private fun prefs() =
         appContext().getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 

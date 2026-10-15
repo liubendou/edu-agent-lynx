@@ -37,7 +37,8 @@ import { createSkillRegistry } from './skills/registry';
 import type { SessionEvent } from './domain/events';
 import { MAX_SESSION_SUMMARIES } from './domain/profile';
 import type { CloudLikeClient } from './cloud/client';
-import { createCloudClient } from './cloud';
+import { createCloudClient, DEFAULT_BASE_URL, MODEL_FLASH, MODEL_PRO } from './cloud';
+import type { CloudConfig } from './cloud/config';
 import type { CloudRequestSegments, StableSegments } from './cloud/context-builder';
 import { EscalationManager, FALLBACK_NEXT_STEP, type EscalationResult, type EscalationSignal } from './cloud/escalation';
 import { BudgetGuard } from './cloud/budget';
@@ -46,6 +47,9 @@ import { Repositories } from './storage/repos';
 import { SESSION_EVENTS_KEY, type Collections } from './storage/repos/collections';
 import { createMemoryKVStore, type KVStore } from './storage/kv';
 import { A2UIStreamParser, type A2UISurfaceSnapshot } from './a2ui/stream-parser';
+import { createToolInvoker, createKvToolUsageStore, type ToolEvent } from './tools/registry';
+import { createDeepSeekVisionClient } from './tools/vision';
+import { detectSpeechBridge } from './tools/tts';
 
 // ── ①②③ 稳定前缀默认内容（M2 占位；M3 catalog 本体建成后替换 catalog 段）──
 
@@ -136,9 +140,12 @@ export class ParsingA2UiEmitter implements A2UiEmitterPort {
   }
 }
 
-// ── ToolInvokerPort：no-op 适配器（真工具是 M6）─────────────────────
+// ── ToolInvokerPort：真工具注册表（M6）+ no-op 适配器（保留测试用）─────
 
-/** no-op 工具调用器：记录调用并返回 unsupported 错误结果（M6 tools/registry.ts 接线前）。 */
+/**
+ * no-op 工具调用器：记录调用并返回 unsupported 错误结果。
+ * M6 起 composition 默认装配真注册表（createToolInvoker），本类保留给测试直用。
+ */
 export class NoopToolInvoker implements ToolInvokerPort {
   /** 调用记录（测试断言 TTS/工具分派是否发生）。 */
   readonly calls: { name: string; args: unknown }[] = [];
@@ -149,7 +156,7 @@ export class NoopToolInvoker implements ToolInvokerPort {
       ok: false,
       error: 'unsupported',
       tool: name,
-      detail: 'M6 tools/registry.ts 接线前不支持真实工具调用',
+      detail: 'M6 tools/registry.ts 已接线；本类仅测试用（composition 默认走真注册表）',
     };
   }
 }
@@ -305,6 +312,24 @@ export class RepositoriesStoragePort implements StoragePort {
 
 // ── 一处装配（composition root 本体）───────────────────────────────
 
+/** tool_call/tool_result 流水追加（session_events 集合；与 StoragePort.events 同一落点，可丢不可阻）。 */
+async function appendToolEvent(kv: KVStore, event: ToolEvent): Promise<void> {
+  try {
+    const raw = await kv.get(SESSION_EVENTS_KEY);
+    let log: unknown[] = [];
+    if (raw !== null) {
+      try {
+        log = JSON.parse(raw) as unknown[];
+      } catch {
+        log = [];
+      }
+    }
+    await kv.set(SESSION_EVENTS_KEY, JSON.stringify([...log, event]));
+  } catch {
+    // 事件流水失败不阻塞工具调用
+  }
+}
+
 export interface CompositionOptions {
   /** KV 桥；缺省内存实现（web 预览/测试）。真机由宿主注入 Native KV（§12 方案 A）。 */
   kv?: KVStore;
@@ -312,6 +337,8 @@ export interface CompositionOptions {
   cloud?: CloudLikeClient;
   /** ①②③ 稳定前缀；缺省 DEFAULT_STABLE_SEGMENTS（M3 catalog 注入后替换）。 */
   stable?: StableSegments;
+  /** 工具调用器覆写（测试注入 fake）；缺省 M6 真注册表（tools/registry.ts）。 */
+  tools?: ToolInvokerPort;
   /** 时钟注入（测试）。 */
   now?: () => Date;
   /** Orchestrator 选项透传（纠偏上限等）。 */
@@ -329,8 +356,8 @@ export interface AppMachine {
   emitter: ParsingA2UiEmitter;
   /** A2UI 流解析器（M4 Session 页 useA2UIStream(a2uiParser) 订阅渐进快照）。 */
   a2uiParser: A2UIStreamParser;
-  /** no-op 工具调用器（calls 记录分派）。 */
-  tools: NoopToolInvoker;
+  /** 工具调用器（M6 真注册表：白名单/限额/offline 标注 + tool 事件流水；createToolInvoker 产物含 descriptors）。 */
+  tools: ToolInvokerPort;
   /** 存储端口适配器。 */
   storage: RepositoriesStoragePort;
   /** 底层仓库（灌种子/断言集合用）。 */
@@ -355,7 +382,16 @@ export async function createAppMachine(options: CompositionOptions = {}): Promis
   await runtime.hydrateFromStorage(kv); // D3：冷启动装配热更新已应用包（缺失/损坏 → 内置兜底）
   const skills = createSkillRuntimePort(runtime);
 
-  const cloud = options.cloud ?? (await createCloudClient({ mockOptions: options.mockOptions })).client;
+  let visionCloudConfig: CloudConfig;
+  let cloud: CloudLikeClient;
+  if (options.cloud !== undefined) {
+    cloud = options.cloud;
+    visionCloudConfig = { apiKey: '', baseUrl: DEFAULT_BASE_URL, modelFlash: MODEL_FLASH, modelPro: MODEL_PRO, mock: true, source: 'none' };
+  } else {
+    const created = await createCloudClient({ mockOptions: options.mockOptions });
+    cloud = created.client;
+    visionCloudConfig = created.config;
+  }
   const escalation = new EscalationManager({
     client: cloud,
     budget: new BudgetGuard({ repos, now: options.now }),
@@ -368,7 +404,19 @@ export async function createAppMachine(options: CompositionOptions = {}): Promis
 
   const a2uiParser = new A2UIStreamParser();
   const emitter = new ParsingA2UiEmitter(a2uiParser);
-  const tools = new NoopToolInvoker();
+  // M6：真工具注册表（白名单/限额/offline 标注）替换 NoopToolInvoker；tool_call/tool_result
+  // 流水桥接进 session_events 集合（与 SessionEvent 同源落盘，可丢不可阻）。
+  // 识图端口与云侧配置同源（Mock 模式下识图请求返回明确 unavailable，recognizeImage 兜底成结果对象）。
+  const tools: ToolInvokerPort = options.tools
+    ?? createToolInvoker({
+      vision: createDeepSeekVisionClient(visionCloudConfig),
+      speechBridge: detectSpeechBridge(),
+      usage: createKvToolUsageStore(kv),
+      onEvent: (event: ToolEvent) => {
+        void appendToolEvent(kv, event);
+      },
+      ...(options.now !== undefined ? { now: options.now } : {}),
+    });
   const storage = new RepositoriesStoragePort(repos);
 
   const ports: OrchestratorPorts = { skills, cloud: cloudPort, emitter, tools, storage };
