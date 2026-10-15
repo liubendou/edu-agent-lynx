@@ -1,128 +1,178 @@
-:root {
-  background-color: #000;
-  --color-text: #fff;
-}
+/*
+ * App.css —— M4 页面布局样式（UID §2/§三；只补布局与局部组件，
+ * 颜色/字阶/圆角/动效一律走 tokens.css + typography.css + motion.css 的 var）。
+ * 动画只改 transform/opacity（禁令1）：细线 scaleX、退场透明度。
+ */
 
-.Background {
-  position: fixed;
-  background: radial-gradient(
-    71.43% 62.3% at 46.43% 36.43%,
-    rgba(18, 229, 229, 0) 15%,
-    rgba(239, 155, 255, 0.3) 56.35%,
-    #ff6448 100%
-  );
-  box-shadow: 0px 12.93px 28.74px 0px #ffd28db2 inset;
-  border-radius: 50%;
-  width: 200vw;
-  height: 200vw;
-  top: -60vw;
-  left: -14.27vw;
-  transform: rotate(15.25deg);
-}
-
-.App {
-  position: relative;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-text {
-  color: var(--color-text);
-}
-
-.Banner {
-  flex: 5;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.Logo {
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 8px;
-}
-
-.Logo--react {
-  width: 100px;
-  height: 100px;
-  animation: Logo--spin infinite 20s linear;
-}
-
-.Logo--lynx {
-  width: 100px;
-  height: 100px;
-  animation: Logo--shake infinite 0.5s ease;
-}
-
-@keyframes Logo--spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes Logo--shake {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(0.9);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-.Content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.Arrow {
-  width: 24px;
-  height: 24px;
-}
-
-.Title {
-  font-size: 36px;
-  font-weight: 700;
-}
-
-.Subtitle {
-  font-style: italic;
-  font-size: 22px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.Description {
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.85);
-  margin: 15rpx;
-}
-
-.Hint {
-  font-size: 12px;
-  margin: 5px;
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.Hint-file {
-  font-style: italic;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.Spacer {
+/* ── 根容器（主题 class 由 App.tsx 挂：design-tokens + theme-light/dark）── */
+.app-root {
   flex: 1;
+  background-color: var(--ambient);
+}
+
+.boot {
+  flex: 1;
+  padding: var(--space-8) var(--space-4);
+}
+
+/* ── 页面骨架 ── */
+.page {
+  flex: 1;
+  background-color: var(--ambient);
+}
+
+.page-head {
+  padding: var(--space-4) var(--space-4) var(--space-2);
+}
+
+.page-body {
+  flex: 1;
+  padding: 0 var(--space-4) var(--space-8);
+}
+
+.page-back {
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) 0; /* 触摸目标 ≥44：文字行高+上下 padding 补足（UID 附录） */
+}
+
+.row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+}
+
+.row-main {
+  flex: 1;
+  margin-right: var(--space-3);
+}
+
+/* ── 首页（条件首屏两分支共用壳）── */
+.home-nav {
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.home-nav-link {
+  padding: var(--space-2) 0;
+}
+
+.home-stream {
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.home-first {
+  gap: var(--space-3);
+}
+
+.home-bottom {
+  padding: var(--space-3) var(--space-4) var(--space-6);
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: var(--faint);
+}
+
+.home-confess {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.home-confess-input {
+  flex: 1;
+  height: 44px; /* 触摸目标下限（UID 附录） */
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-s);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--faint);
+  background-color: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+}
+
+/* ── 会话页（UID §2.3；四档共用容器）── */
+.s-page {
+  border-radius: var(--radius-l); /* 会话容器 16（UID 附录圆角） */
+}
+
+.s-surface-wrap {
+  gap: var(--space-3);
+}
+
+/* 会话进度细线（UID §三）：剩几格缩多少，scaleX transform-only */
+.s-hairline-track {
+  margin-top: var(--space-2);
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background-color: var(--faint);
+  overflow: hidden;
+}
+
+.s-hairline {
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background-color: var(--accent); /* 进度细线是 accent 三个去处之一（UID §1.1） */
+  transform-origin: left;
+  transition-property: transform;
+  transition-duration: 240ms; /* 卡片切换等效时长（附录） */
+  transition-timing-function: cubic-bezier(0.27, 1.06, 0.18, 1); /* 空间曲线带过冲 */
+}
+
+/* 1s 撤销条（UID §三：压在卡片下方，不做弹窗） */
+.s-undo {
+  margin: var(--space-2) var(--space-4) 0;
+  padding: var(--space-3);
+  align-items: center;
+  border-radius: var(--radius-s);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--faint);
+  background-color: var(--surface);
+}
+
+.s-error {
+  margin-top: var(--space-3);
+  color: var(--bad);
+}
+
+.s-footer {
+  flex-direction: row;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-6);
+}
+
+.s-footer-btn {
+  flex: 1;
+  height: 44px; /* 触摸目标下限 */
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-s);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--faint);
+  background-color: var(--surface);
+}
+
+/* ── 地图/成长页的模块卡 ── */
+.map-module {
+  margin-top: var(--space-3);
+  gap: var(--space-2);
+}
+
+/* ── 资料库 ── */
+.lib-section {
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.lib-row {
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.lib-bookmark {
+  padding: var(--space-2) 0;
 }

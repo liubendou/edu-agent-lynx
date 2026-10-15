@@ -10,7 +10,9 @@
  */
 import { useRef, useState } from '@lynx-js/react';
 import type { A2UIAction, ComponentPropsMap } from '../a2ui/catalog';
+import type { Grade } from '../domain/types';
 import { TAP_DEBOUNCE_MS } from '../design-system/motion';
+import { hapticJudge } from './haptics';
 
 export type FeedbackBarProps = ComponentPropsMap['FeedbackBar'] & {
   /** 渲染层注入：组件实例 id */
@@ -26,11 +28,12 @@ export function FeedbackBar({ grades, pendingJudge, nodeId, onAction }: Feedback
   const lastTapAt = useRef(0);
 
   const judge = (grade: string) => {
-    if (!grades.includes(grade as never)) return;
+    if (!grades.includes(grade as Grade)) return;
     const now = Date.now();
     if (now - lastTapAt.current < TAP_DEBOUNCE_MS) return;
     lastTapAt.current = now;
     setChosen(grade);
+    hapticJudge(grade as Grade); // M4 T5 接线：判定对错触觉（D1 ②；真机手感 M7 回归）
     onAction?.({ kind: 'agent', nodeId: nodeId ?? '', action: 'grade', payload: { grade } });
   };
 

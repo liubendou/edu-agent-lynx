@@ -32,6 +32,7 @@ import {
   endSession,
   expireRemediation,
   judgeAnswer,
+  revokeAnswer,
   startSession,
   buildSessionSummary,
   type SessionState,
@@ -108,6 +109,8 @@ export interface TurnOutcome {
   attempts: number;
   escalated: boolean;
   phase: TurnPhase;
+  /** 本回合呈现目标 ALU（pickTarget 结果；null=收尾回合。会话容器作答 observation 定位用，M4） */
+  targetAluId: AluId | null;
   judged?: { aluId: AluId; grade: Grade; fsrsApplied: boolean };
   remediationStarted: boolean;
   /** 本回合注入的 directives 原文（观测/调试位） */
@@ -357,10 +360,25 @@ export class Orchestrator {
       attempts: streamed.attempts,
       escalated: streamed.escalated,
       phase,
+      targetAluId: target,
       ...(processed.judged !== undefined ? { judged: processed.judged } : {}),
       remediationStarted: processed.remediationStarted,
       directives: baseRequest.directives,
     };
+  }
+
+  /** 撤销该卡最近一次可撤销作答（1s 撤销窗口，UID §三；domain.revokeAnswer 落地：
+   *  记录标 revoked、FSRS 卡回滚，撤销不计入 FSRS/日志）。复习批次游标回退重呈该卡；
+   *  无可撤销作答返回 null（M4 会话容器撤销条接线用）。 */
+  revokeLastAnswer(aluId: AluId): AnswerRecord | null {
+    if (this.phase !== 'in_session' || !this.session || this.session.ended) return null;
+    const out = revokeAnswer(this.session, aluId);
+    this.session = out.state;
+    if (out.record === null) return null;
+    if (this.session.skill === 'review' && this.cursor > 0 && this.queue[this.cursor - 1] === aluId) {
+      this.cursor -= 1; // 已推进过的卡回退游标，下一回合重呈
+    }
+    return out.record;
   }
 
   /** 硬规则1/2 代码强制的出卡 action 入口（quick/review 一律拒绝；standard/deep 讲完自检过调用）。 */

@@ -45,6 +45,7 @@ import type { MockCloudClientOptions } from './cloud/mock';
 import { Repositories } from './storage/repos';
 import { SESSION_EVENTS_KEY, type Collections } from './storage/repos/collections';
 import { createMemoryKVStore, type KVStore } from './storage/kv';
+import { A2UIStreamParser, type A2UISurfaceSnapshot } from './a2ui/stream-parser';
 
 // ── ①②③ 稳定前缀默认内容（M2 占位；M3 catalog 本体建成后替换 catalog 段）──
 
@@ -73,7 +74,7 @@ export const DEFAULT_STABLE_SEGMENTS: StableSegments = {
   catalog: DEFAULT_CATALOG_PLACEHOLDER,
 };
 
-// ── A2UiEmitterPort：缓冲收集器（真 renderer 是 M3）─────────────────
+// ── A2UiEmitterPort：缓冲收集器（M2-int 原始形态，保留供纯收集测试）──
 
 /** A2UI 缓冲收集器：收集 emit 的 JSONL 片段，flush 按批归档并清空（测试可断言）。 */
 export class BufferingA2UiEmitter implements A2UiEmitterPort {
@@ -94,6 +95,44 @@ export class BufferingA2UiEmitter implements A2UiEmitterPort {
   /** 当前未 flush 的片段（只读视图）。 */
   get buffered(): readonly string[] {
     return this.pending;
+  }
+}
+
+// ── A2UiEmitterPort：组合发射器（M4 T1：渐进解析 + 批归档，双语义）──
+
+/**
+ * A2UI 组合发射器（M4 T1 装配产物）：emit 同时喂 A2UIStreamParser（UI 渐进渲染，
+ * stream-parser.ts 自研 renderer 的唯一入口）并归档批；flush 收尾解析并按批归档。
+ * 归档语义与 BufferingA2UiEmitter 完全一致（integration.test emitter.batches
+ * 断言不变：每回合一批、批内全为 surfaceUpdate 行）；渲染语义由 parser 承担。
+ */
+export class ParsingA2UiEmitter implements A2UiEmitterPort {
+  /** 当前回合已 emit、尚未 flush 的片段。 */
+  private pending: string[] = [];
+  /** 每次 flush 归档一批（[] 表示空 flush 也记次）。 */
+  readonly batches: string[][] = [];
+
+  constructor(private readonly parser: A2UIStreamParser) {}
+
+  emit(jsonlChunk: string): void {
+    this.pending.push(jsonlChunk);
+    this.parser.feed(jsonlChunk);
+  }
+
+  flush(): void {
+    this.parser.flush();
+    this.batches.push([...this.pending]);
+    this.pending = [];
+  }
+
+  /** 当前未 flush 的片段（只读视图）。 */
+  get buffered(): readonly string[] {
+    return this.pending;
+  }
+
+  /** 当前 surface 快照（parser 透传；Session 页 useA2UIStream 直接订阅 parser）。 */
+  get snapshot(): A2UISurfaceSnapshot {
+    return this.parser.getSnapshot();
   }
 }
 
@@ -286,8 +325,10 @@ export interface AppMachine {
   /** 装配完成的主状态机（boot/openSession/runTurn/notifySessionEnd 全路径可用）。 */
   orchestrator: Orchestrator;
   ports: OrchestratorPorts;
-  /** A2UI 缓冲收集器（batches 逐回合归档）。 */
-  emitter: BufferingA2UiEmitter;
+  /** A2UI 组合发射器（emit 渐进喂 parser + batches 逐回合归档）。 */
+  emitter: ParsingA2UiEmitter;
+  /** A2UI 流解析器（M4 Session 页 useA2UIStream(a2uiParser) 订阅渐进快照）。 */
+  a2uiParser: A2UIStreamParser;
   /** no-op 工具调用器（calls 记录分派）。 */
   tools: NoopToolInvoker;
   /** 存储端口适配器。 */
@@ -325,7 +366,8 @@ export async function createAppMachine(options: CompositionOptions = {}): Promis
     escalation,
   });
 
-  const emitter = new BufferingA2UiEmitter();
+  const a2uiParser = new A2UIStreamParser();
+  const emitter = new ParsingA2UiEmitter(a2uiParser);
   const tools = new NoopToolInvoker();
   const storage = new RepositoriesStoragePort(repos);
 
@@ -333,5 +375,5 @@ export async function createAppMachine(options: CompositionOptions = {}): Promis
   const orchestratorOpts: OrchestratorOptions = options.orchestrator
     ?? (options.now !== undefined ? { now: options.now } : {});
   const orchestrator = new Orchestrator(ports, orchestratorOpts);
-  return { orchestrator, ports, emitter, tools, storage, repos, cloud, skills, runtime };
+  return { orchestrator, ports, emitter, a2uiParser, tools, storage, repos, cloud, skills, runtime };
 }
