@@ -6,16 +6,12 @@
  *  standard=ExplainStep四段式+QuestionCard / deep=MapView+ProgressRing+变式QuestionCard。
  * 确定性：无随机、无时间戳——同输入字节级相等（可测）。
  */
+import { COMPONENT_NAMES, type ComponentName } from '../../a2ui/catalog';
 
-/** 16 零件清单（CONTRACTS §5；catalog 本体在 M3 src/a2ui/catalog.ts，届时迁移）。 */
-export const MOCK_COMPONENT_NAMES = [
-  'ConceptCard', 'QuestionCard', 'RevealCard', 'MapView', 'ProgressRing',
-  'ExplainStep', 'ChoiceGrid', 'MicButton', 'TTSBar', 'FeedbackBar',
-  'SourceLink', 'DueChip', 'TodayPlanPanel', 'EntryCard', 'StreamSkeleton',
-  'SessionEndCard',
-] as const;
+/** 16 零件清单（CONTRACTS §5；M3 起由 a2ui/catalog.ts 单一事实源派生）。 */
+export const MOCK_COMPONENT_NAMES = COMPONENT_NAMES;
 
-export type MockComponentName = (typeof MOCK_COMPONENT_NAMES)[number];
+export type MockComponentName = ComponentName;
 
 export interface MockComponentNode {
   id: string;
