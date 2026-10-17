@@ -2,7 +2,8 @@
  * 云侧配置（M2c，CONTRACTS §7 / ARCHITECTURE §7 / PRD §7.6）。
  * 模型名集中常量（用户裁决 D2：Key 到位后核实实际 API 模型名，届时只改此处，不动架构）；
  * API Key 与 base URL 从本地配置文件 edu-agent/cloud.local.json 读取（D7：V1 直连 DeepSeek，
- * 测试 Key 本地配置，不进代码库）——文件缺失或 key 为空 → 自动进入 Mock 模式（无 Key 全链路可开发可测）。
+ * 测试 Key 本地配置，不进代码库）——文件缺失或 key 为空 → mock=true，由 createCloudClient
+ * 返回 UnconfiguredCloudClient 显式报错（缺 Key 不再静默 Mock；测试可显式 allowMock:true 走假数据）。
  * DeepSeek 走 OpenAI 兼容接口：POST {base}/chat/completions，原生 fetch，不引 SDK。
  */
 
@@ -26,19 +27,19 @@ export interface CloudLocalFile {
   modelPro?: string;
 }
 
-/** 运行时配置。mock=true 表示无 Key，走 MockCloudClient（D7）。 */
+/** 运行时配置。mock=true 表示无 Key（客户端去向由 createCloudClient 决定，见 index.ts）。 */
 export interface CloudConfig {
   apiKey: string;
   baseUrl: string;
   modelFlash: string;
   modelPro: string;
-  /** true = 无 Key，自动 Mock。 */
+  /** true = 无 Key（未显式 allowMock 时工厂返 UnconfiguredCloudClient 显式报错）。 */
   mock: boolean;
-  /** 配置来源：'file'（cloud.local.json）/ 'global'（宿主注入）/ 'none'（缺失 → Mock）。 */
+  /** 配置来源：'file'（cloud.local.json）/ 'global'（宿主注入）/ 'none'（缺失 → 无 Key）。 */
   source: 'file' | 'global' | 'none';
 }
 
-/** 解析 cloud.local.json 文本；null / 非法 JSON → null（进入 Mock）。 */
+/** 解析 cloud.local.json 文本；null / 非法 JSON → null（视为无 Key）。 */
 export function parseCloudLocalFile(raw: string | null): CloudLocalFile | null {
   if (raw === null) return null;
   try {
@@ -50,7 +51,8 @@ export function parseCloudLocalFile(raw: string | null): CloudLocalFile | null {
   }
 }
 
-/** 文件内容 → 运行时配置。key 为空（或缺失）→ mock=true（§7.6 用户零配置、无 Key 可跑全链路）。 */
+/** 文件内容 → 运行时配置。key 为空（或缺失）→ mock=true；缺 Key 时的客户端去向由
+ *  createCloudClient 决定（缺省返回 UnconfiguredCloudClient 显式报错，绝不静默 Mock）。 */
 export function resolveCloudConfig(file: CloudLocalFile | null, source: CloudConfig['source']): CloudConfig {
   const apiKey = typeof file?.apiKey === 'string' ? file.apiKey.trim() : '';
   return {

@@ -15,10 +15,11 @@ import {
 import { compareVersions, SkillRuntimeImpl, type OverridePack } from '../skills/runtime';
 import { createSkillRegistry, type RouteMode } from '../skills/registry';
 import { createSkillUpdater, hashHex, type FetchLike } from '../skills/updater';
+import { SKILL_SRC_ROOT } from './skill-root';
 
 type AnyPackName = SkillName | KnowledgeSkillName;
 const ALL_NAMES: AnyPackName[] = ['quick-learning', 'review', 'standard-learning', 'deep-learning', 'score-boost'];
-const SRC_ROOT = '/home/lbd/桌面/agent/skill';
+const SRC_ROOT = SKILL_SRC_ROOT;
 
 /** 读只读源 SKILL.md：剥 frontmatter，提取 description 原文与正文。 */
 function readSource(name: string): { description: string; body: string } {

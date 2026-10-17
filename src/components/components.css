@@ -1,14 +1,14 @@
 /*
- * components.css —— 16 零件 ReactLynx 实现 · 样式（M3）
- * "纸与墨"（UID §1.1）：卡片不靠阴影分层，靠细线和留白；只消费 design-system
- * 的 token（tokens.css/typography.css/motion.css），本文件不定义新颜色/时长值。
+ * components.css —— 16 零件 ReactLynx 实现 · 样式（冷白极简 v1）
+ * 冷白极简（走法 B）：卡片不靠阴影分层，靠 1px 冷灰 --faint 细线 + 大片留白；
+ * 只消费 design-system 的 token（tokens.css/typography.css/motion.css），本文件不定义新颜色/时长值。
  *
- * 动效纪律（UID §7.2 十条禁令 + §1.2 三动词）：
+ * 动效纪律（十条禁令 + 三个动词）：
  *  - 动画只改 transform / opacity（禁令1）；颜色变化走 transition 的 engine 侧插值。
  *  - 生长（入场）：上移 12px + 淡入 180ms 缓出（.a2ui-grow，配 --ease-effects）。
- *  - 按下反馈：scale 0.97 / 90ms（:active 引擎侧，不占 JS；真机主线程跟手是 M4 页面层职责）。
- *  - 选中/落下：120ms（--dur-select）；判定三色 good/warn/bad（UID §5.4）。
- *  - 间距用子项 margin 而非 flex gap（Lynx CSS 子集兼容取向，M7 真机如支持 gap 可换回）。
+ *  - 按下反馈：scale 0.97 / 90ms（:active 引擎侧，不占 JS；真机主线程跟手是页面层职责）。
+ *  - 选中/落下：120ms（--dur-select）；判定三色 good/warn/bad。
+ *  - 间距用子项 margin 而非 flex gap（Lynx CSS 子集兼容取向，真机如支持 gap 可换回）。
  */
 
 /* ── 卡片基座 ─────────────────────────────────────────────────────── */
@@ -253,7 +253,7 @@
   margin-top: var(--space-1);
 }
 
-/* ── DueChip（"还有几张"，像本子上夹的便签）───────────────────────── */
+/* ── DueChip（"还有几张"：极简胶囊，弱边框、无投影）────────────────── */
 .due-chip {
   border: 1px solid var(--faint);
   border-radius: var(--radius-pill);

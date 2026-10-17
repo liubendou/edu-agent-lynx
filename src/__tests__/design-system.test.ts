@@ -28,6 +28,37 @@ import {
 const css = (name: string) =>
   readFileSync(new URL(`../design-system/${name}`, import.meta.url), 'utf8');
 
+// ── 冷白极简校验小工具（冷调判据 + WCAG 对比度）──
+
+/** 从某主题块里取出一个 `--name: #RRGGBB` token 的 hex 值（大写） */
+const hexOf = (block: string, name: string): string => {
+  const m = block.match(new RegExp(`--${name}: (#[0-9A-Fa-f]{6})`));
+  if (m === null) throw new Error(`token not found: --${name}`);
+  return m[1].toUpperCase();
+};
+
+const rgbOf = (hex: string) => ({
+  r: parseInt(hex.slice(1, 3), 16),
+  g: parseInt(hex.slice(3, 5), 16),
+  b: parseInt(hex.slice(5, 7), 16),
+});
+
+/** 相对亮度（WCAG 2.x 定义） */
+const relLum = (hex: string): number => {
+  const f = (c: number) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  const { r, g, b } = rgbOf(hex);
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+};
+
+const contrast = (a: string, b: string): number => {
+  const x = relLum(a);
+  const y = relLum(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+};
+
 // ── 降级三档判定（UID §7.4）──
 
 test('resolveThemeTier: reduce-motion wins as static, perf signals reduce, else full', () => {
@@ -120,28 +151,28 @@ test('readColorScheme follows host-injected appTheme, defaults to light', () => 
 
 // ── CSS 数值落地（数值逐字对齐 UID §1.1 / 附录）──
 
-test('tokens.css: full paper-and-ink palette light+dark, spacing grid, radii', () => {
+test('tokens.css: cold-white palette light+dark, spacing grid, radii', () => {
   const s = css('tokens.css');
-  // 亮色（纸）
-  expect(s).toContain('--ambient: #F6F3EC');
-  expect(s).toContain('--surface: #FDFBF6');
-  expect(s).toContain('--faint: #E4DED2');
-  expect(s).toContain('--ink: #221D18');
-  expect(s).toContain('--ink-soft: #6B6259');
-  expect(s).toContain('--accent: #2E4A6E');
-  expect(s).toContain('--good: #3E6B4C');
-  expect(s).toContain('--warn: #A5761F');
-  expect(s).toContain('--bad: #A5402F');
-  // 暗色
-  expect(s).toContain('--ambient: #17140F');
-  expect(s).toContain('--surface: #221D16');
-  expect(s).toContain('--faint: #332C22');
-  expect(s).toContain('--ink: #EDE7DC');
-  expect(s).toContain('--ink-soft: #A69C8D');
-  expect(s).toContain('--accent: #7FA0C8');
-  expect(s).toContain('--good: #7FAE8C');
-  expect(s).toContain('--warn: #CFA152');
-  expect(s).toContain('--bad: #D07A69');
+  // 亮色（冷白）
+  expect(s).toContain('--ambient: #F7F9FC');
+  expect(s).toContain('--surface: #FFFFFF');
+  expect(s).toContain('--faint: #E4E8EE');
+  expect(s).toContain('--ink: #171A20');
+  expect(s).toContain('--ink-soft: #5A6472');
+  expect(s).toContain('--accent: #33506F');
+  expect(s).toContain('--good: #2F6A55');
+  expect(s).toContain('--warn: #8A6414');
+  expect(s).toContain('--bad: #A63C36');
+  // 暗色（冷调低亮度版）
+  expect(s).toContain('--ambient: #0F1216');
+  expect(s).toContain('--surface: #161A20');
+  expect(s).toContain('--faint: #262C35');
+  expect(s).toContain('--ink: #E9EDF2');
+  expect(s).toContain('--ink-soft: #9AA3AE');
+  expect(s).toContain('--accent: #8AA9D2');
+  expect(s).toContain('--good: #7FB6A3');
+  expect(s).toContain('--warn: #CBA55C');
+  expect(s).toContain('--bad: #D5837A');
   // veil 补位已注明 UID 未给值
   expect(s).toContain('--veil:');
   expect(s).toContain('UID 未给值，蓝图补位');
@@ -156,6 +187,34 @@ test('tokens.css: full paper-and-ink palette light+dark, spacing grid, radii', (
   expect(s).toContain('--radius-pill: 999px');
 });
 
+test('tokens.css: cold-toned (B >= R) + WCAG AA text contrast', () => {
+  const s = css('tokens.css');
+  const light = s.slice(s.indexOf('.theme-light {'), s.indexOf('.theme-dark {'));
+  const dark = s.slice(s.indexOf('.theme-dark {'));
+
+  // 冷调判据：关键 token 的蓝通道 ≥ 红通道（色温落在冷色侧），证明不是暖色纸感
+  const notCool: string[] = [];
+  for (const [themeName, block] of [['light', light], ['dark', dark]] as const) {
+    for (const key of ['ambient', 'surface', 'faint', 'ink', 'ink-soft', 'accent'] as const) {
+      const { r, b } = rgbOf(hexOf(block, key));
+      if (b < r) notCool.push(`${themeName}.${key}(${hexOf(block, key)}) B<R`);
+    }
+  }
+  expect(notCool).toEqual([]);
+
+  // 明度分层（以光代替投影）：亮色 surface 比 ambient 亮；暗色 ambient 比 surface 暗
+  expect(relLum(hexOf(light, 'surface')) > relLum(hexOf(light, 'ambient'))).toBe(true);
+  expect(relLum(hexOf(dark, 'ambient')) < relLum(hexOf(dark, 'surface'))).toBe(true);
+
+  // WCAG AA：正文/强调文字 ≥ 4.5:1；辅助文字 ≥ 3:1
+  expect(contrast(hexOf(light, 'ink'), hexOf(light, 'surface')) >= 4.5).toBe(true);
+  expect(contrast(hexOf(light, 'accent'), hexOf(light, 'surface')) >= 4.5).toBe(true);
+  expect(contrast(hexOf(light, 'ink-soft'), hexOf(light, 'surface')) >= 3).toBe(true);
+  expect(contrast(hexOf(dark, 'ink'), hexOf(dark, 'surface')) >= 4.5).toBe(true);
+  expect(contrast(hexOf(dark, 'accent'), hexOf(dark, 'surface')) >= 4.5).toBe(true);
+  expect(contrast(hexOf(dark, 'ink-soft'), hexOf(dark, 'surface')) >= 3).toBe(true);
+});
+
 test('typography.css + motion.css: type scale, line-height, durations and M3 curves verbatim', () => {
   const t = css('typography.css');
   // 字阶 13/16/18/20/28；正文行高 1.75；字重 400/600；中文栈
@@ -165,7 +224,7 @@ test('typography.css + motion.css: type scale, line-height, durations and M3 cur
   expect(t).toContain('font-size: 20px');
   expect(t).toContain('font-size: 28px');
   expect(t).toContain('line-height: 1.75');
-  expect(t).toContain("font-family: system-ui, 'PingFang SC', 'Noto Sans SC'");
+  expect(t).toContain("font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif");
   expect(t.match(/font-weight: 400/g)).toHaveLength(2); // 正文+辅助
   expect(t.match(/font-weight: 600/g)).toHaveLength(3); // 三个标题档
   expect(t).toContain('Noto Serif SC'); // 衬线注释开关存在且默认注释
@@ -178,6 +237,11 @@ test('typography.css + motion.css: type scale, line-height, durations and M3 cur
   expect(m).toContain('--dur-switch: 240ms');
   expect(m).toContain('--dur-page: 320ms');
   expect(m).toContain('--dur-exit: 200ms');
+  // 规范时长 token：micro 120 / base 200 / slow 600 / draw 800（语义与入口保留）
+  expect(m).toContain('--dur-micro: 120ms');
+  expect(m).toContain('--dur-base: 200ms');
+  expect(m).toContain('--dur-slow: 600ms');
+  expect(m).toContain('--dur-draw: 800ms');
   // M3 spatial（带过冲）/ effects（不过冲）两族曲线，逐字
   expect(m).toContain('cubic-bezier(0.27, 1.06, 0.18, 1.00)');
   expect(m).toContain('--dur-spatial: 500ms');

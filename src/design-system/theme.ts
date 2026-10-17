@@ -1,17 +1,17 @@
 /**
- * theme.ts —— "纸与墨"设计系统 · 降级三档判定与亮暗主题（UID §7.4；ARCHITECTURE §1/§16 D1）
- * M2b 2026-10-15。
+ * theme.ts —— "冷白极简"设计系统 · 降级三档判定与亮暗主题
+ * 冷白重构 v1：视觉层换成冷白极简；本文件对外导出签名（类型名/常量名/函数名/对象键名）
+ * 与档位语义一律保持，以免消费方（src/App.tsx 等）受影响。
  *
- * 降级三档（UID §7.4）：
- *   完整（默认）  全部动画加弹簧、stagger、毛玻璃
- *   精简          低端机、省电模式、检测到持续抖动 → 关 stagger 和抖动、时长打六折、
- *                 跟手保留（核心手感不能砍）、毛玻璃关闭
- *   静止          系统"减少动态效果" → 只留 120ms 透明度切换；跟手位移仍 1:1、
- *                 取消弹性吸附；触觉保留（D1：动效可关、触觉补位互补）
+ * 降级三档（设计文档 full / reduced / minimal；端侧实现名分别为 full / reduced / static）：
+ *   完整 full（默认）  全部动画加弹簧、stagger、毛玻璃
+ *   精简 reduced       低端机、省电模式、检测到持续抖动 → 关 stagger 和抖动、时长打六折、
+ *                     跟手保留（核心手感不能砍）、毛玻璃关闭
+ *   静止 static（=minimal） 系统"减少动态效果" → 只留 120ms 透明度切换；跟手位移仍 1:1、
+ *                     取消弹性吸附；触觉保留（动效可关、触觉补位互补）；系统设置强制且不可覆盖
  *
- * 线程与稳定性纪律（UID §7.4）：判定和切换都在后台线程做（本文件全部纯函数，
- * 在 React 运行时即后台线程调用）；切换只改时长/开关类参数，不动布局属性，
- * 不引起界面跳动。消费方（组件/主线程脚本）按 TierParams 取参。
+ * 动效纪律：判定和切换都在后台线程做（本文件全部纯函数，在 React 运行时即后台线程调用）；
+ * 切换只改时长/开关类参数，不动布局属性，不引起界面跳动。消费方（组件/主线程脚本）按 TierParams 取参。
  *
  * 检测信号采集（M2b 查证结论，2026-10-15）：
  *  - Lynx SystemInfo 字段仅 engineVersion/osVersion/pixelWidth/pixelHeight/platform/runtimeType，
@@ -119,7 +119,7 @@ export function tierParams(tier: ThemeTier): TierParams {
  *    依赖锁定清单（docs/04），故不走 CSS media query。
  *  - 走官方 Theming 指南路径：宿主经 Lynx SDK 写 lynx.__globalProps.appTheme（JS 只读，
  *    更新触发 onGlobalPropsChanged 并整页重渲染，冷启动即有值、无闪白）。
- *  - 无宿主注入（测试/预览环境）默认亮色（纸）。
+ *  - 无宿主注入（测试/预览环境）默认亮色（冷白）。
  */
 export function readColorScheme(): ColorScheme {
   const g: { appTheme?: string } | undefined =

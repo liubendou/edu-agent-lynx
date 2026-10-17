@@ -11,8 +11,8 @@
  *  - ToolInvokerPort   ← NoopToolInvoker（真工具是 M6 tools/registry.ts）
  *  - StoragePort       ← storage/repos（Repositories；SessionEvent 流水落 session_events 集合）
  *
- * cloud 缺省走 createCloudClient()：cloud.local.json 缺失/无 Key 自动 Mock（D7），
- * 无需 API Key 即可全链路运行与测试。
+ * cloud 缺省走 createCloudClient()：有 Key → 真 CloudClient；无 Key → UnconfiguredCloudClient
+ * 显式报错（绝不静默 Mock）。仅测试显式 allowMock:true 或直接注入 options.cloud 时才用假数据。
  *
  * 位置说明：ARCHITECTURE §1 目录树未单列本文件——作为补位放在 src/composition.ts，
  * M4 页面装配若需更贴切的位置再迁移（提交信息已注明）。
@@ -352,7 +352,7 @@ async function appendToolEvent(kv: KVStore, event: ToolEvent): Promise<void> {
 export interface CompositionOptions {
   /** KV 桥；缺省内存实现（web 预览/测试）。真机由宿主注入 Native KV（§12 方案 A）。 */
   kv?: KVStore;
-  /** 云侧客户端；缺省 createCloudClient()（cloud.local.json 缺失/无 Key → 自动 Mock，D7）。 */
+  /** 云侧客户端；缺省 createCloudClient()（无 Key → UnconfiguredCloudClient 显式报错，绝不静默 Mock）。 */
   cloud?: CloudLikeClient;
   /** ①②③ 稳定前缀；缺省 DEFAULT_STABLE_SEGMENTS（M3 catalog 注入后替换）。 */
   stable?: StableSegments;
@@ -364,6 +364,8 @@ export interface CompositionOptions {
   orchestrator?: OrchestratorOptions;
   /** Mock 模式参数（延迟/升级应答注入；仅未显式注入 cloud 时生效）。 */
   mockOptions?: MockCloudClientOptions;
+  /** 显式允许 Mock（测试用）；默认 false（生产语义：无 Key 显式报错）。透传 createCloudClient。 */
+  allowMock?: boolean;
 }
 
 /** 装配产物：machine + 五端口 + 各实现句柄（测试灌种子/断言用）。 */
@@ -409,7 +411,7 @@ export async function createAppMachine(options: CompositionOptions = {}): Promis
     cloud = options.cloud;
     visionCloudConfig = { apiKey: '', baseUrl: DEFAULT_BASE_URL, modelFlash: MODEL_FLASH, modelPro: MODEL_PRO, mock: true, source: 'none' };
   } else {
-    const created = await createCloudClient({ mockOptions: options.mockOptions });
+    const created = await createCloudClient({ mockOptions: options.mockOptions, allowMock: options.allowMock });
     cloud = created.client;
     visionCloudConfig = created.config;
   }
@@ -437,7 +439,7 @@ export async function createAppMachine(options: CompositionOptions = {}): Promis
       : undefined;
   // M6：真工具注册表（白名单/限额/offline 标注）替换 NoopToolInvoker；tool_call/tool_result
   // 流水桥接进 session_events 集合（与 SessionEvent 同源落盘，可丢不可阻）。
-  // 识图端口与云侧配置同源（Mock 模式下识图请求返回明确 unavailable，recognizeImage 兜底成结果对象）。
+  // 识图端口与云侧配置同源（缺 Key → 明确 not_configured 报错，recognizeImage 兜底成 {ok:false} 结果对象，不静默）。
   const tools: ToolInvokerPort = options.tools
     ?? createToolInvoker({
       vision: createDeepSeekVisionClient(visionCloudConfig),

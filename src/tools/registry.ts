@@ -103,7 +103,7 @@ export function createKvToolUsageStore(kv: { get(key: string): Promise<string | 
 }
 
 export interface ToolInvokerDeps {
-  /** 识图云侧端口（composition 注入：有 Key → createDeepSeekVisionClient；Mock → unavailable 结果）。 */
+  /** 识图云侧端口（composition 注入：有 Key → createDeepSeekVisionClient；无 Key → 显式「未配置」降级结果）。 */
   vision: VisionCloudPort;
   /** 语音原生桥（探测结果；null = web/测试环境，语音工具返回 unavailable）。 */
   speechBridge: SpeechNativeBridge | null;

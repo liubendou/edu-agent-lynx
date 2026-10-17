@@ -3,6 +3,7 @@
 import { expect, test } from '@rstest/core';
 import { readFileSync } from 'node:fs';
 
+import { SKILL_SRC_ROOT } from './skill-root';
 import { checkGate, checkTraceability } from '../pipeline/gate';
 import { runSampleReview, heuristicSampleReviewer } from '../pipeline/sampler';
 import {
@@ -11,7 +12,7 @@ import {
 import { SOURCE_DOC_META } from '../pipeline/seeds/meta-course';
 import { SOURCE_DOC_CHECKLIST, SOURCE_DOC_LAKENS, STATQUEST_ENTRY_TEXT } from '../pipeline/seeds/psychology';
 
-const SRC_ROOT = '/home/lbd/桌面/agent/skill';
+const SRC_ROOT = SKILL_SRC_ROOT;
 const METHODOLOGY_PATH = `${SRC_ROOT}/score-boost/references/提分方法论_汇总.md`;
 const CHECKLIST_PATH = `${SRC_ROOT}/quick-learning/references/资源清单.md`;
 

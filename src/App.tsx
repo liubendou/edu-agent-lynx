@@ -9,11 +9,14 @@
  *    降级档信号（settings.reduceMotion → 静止档，触觉保留 D1）注入 haptics 门控；
  *  - 路由：单列流 + 轻入口（无 TabBar，UID §八）；会话以 seq 为 key 重挂载开新会话；
  *    退会话后重算今日决策（队列/画像已因会话而变）。
+ *  - 无 Key（cloud.local.json 缺失/Key 为空 → config.mock=true）不做首屏拦截：App 照常启动、
+ *    端侧复习/种子/画像照常可用；只把判据传给首屏，由对话页在**真正失败的那一刻**引导去设置页。
  * 启动期骨架先出（StreamSkeleton 定高，UID §2.1 不白屏）；失败给文案。
  */
 import { useCallback, useEffect, useState } from '@lynx-js/react';
 import './App.css';
 import { createAppMachine, seedFirstRunContent, type AppMachine } from './composition';
+import { loadCloudConfig } from './cloud/config';
 import type { BootOutcome } from './orchestrator/machine';
 import { readColorScheme, themeClassName } from './design-system/theme';
 import { setHapticsSignals } from './components/haptics';
@@ -31,6 +34,9 @@ export function App() {
   const [machine, setMachine] = useState<AppMachine | null>(null);
   const [boot, setBoot] = useState<BootOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 无 Key 判据（config.mock === true）：不在首屏拦截——App 照常启动、离线部分可用，
+  // 只在真正发起云侧生成且失败时（Chat 页兜底提示）引导去设置页填 API Key。
+  const [cloudMock, setCloudMock] = useState(false);
   // 唯一首屏 = chat（改造清单 §1）；home/session 暂留回退对比，批次 3 清理
   const [route, setRoute] = useState<Route>('chat');
   const [sessionSeed, setSessionSeed] = useState<{ initialText?: string; seq: number }>({ seq: 0 });
@@ -41,6 +47,7 @@ export function App() {
     void (async () => {
       try {
         const m = await createAppMachine();
+        const cloudConfig = await loadCloudConfig(); // 无 Key 判据（读不到/Key 为空 → mock=true）
         const settings = await m.repos.loadSettings();
         setHapticsSignals({
           reduceMotion: settings.reduceMotion === true, // 宿主写 settings（theme.ts 头注）；页内可手动开
@@ -60,6 +67,7 @@ export function App() {
         if (!alive) return;
         setMachine(m);
         setBoot(outcome);
+        setCloudMock(cloudConfig.mock);
       } catch (err) {
         if (alive) setError(err instanceof Error ? err.message : String(err));
       }
@@ -101,7 +109,7 @@ export function App() {
           )}
         </view>
       ) : route === 'chat' ? (
-        <ChatPage machine={machine} boot={boot} navigate={setRoute} />
+        <ChatPage machine={machine} boot={boot} navigate={setRoute} cloudMock={cloudMock} />
       ) : route === 'home' ? (
         <Home machine={machine} boot={boot} navigate={setRoute} onOpenSession={openSession} />
       ) : route === 'session' ? (

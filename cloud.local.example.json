@@ -1,7 +1,7 @@
 {
-  "_comment": "复制本文件为 cloud.local.json 并填入真实 Key。cloud.local.json 已加入 .gitignore，绝不入库；文件缺失或 apiKey 为空时自动进入 Mock 模式（无 Key 全链路可开发可测）。baseUrl 填 DeepSeek OpenAI 兼容端点（不含 /chat/completions）。模型名（modelFlash/modelPro）为 D2 待核实项：Key 到位后核实实际 API 模型名并按需覆盖。",
+  "_comment": "复制本文件为 cloud.local.json 并填入真实 Key。cloud.local.json 已加入 .gitignore，绝不入库；文件缺失或 apiKey 为空时，生产路径会显式报错（提示去设置页填入 API Key），不静默使用假数据。baseUrl 填 DeepSeek OpenAI 兼容端点（不含 /chat/completions）。模型名（modelFlash/modelPro）可覆盖 config.ts 常量；缺省 modelFlash=deepseek-flash、modelPro=deepseek-v4-pro。",
   "apiKey": "",
   "baseUrl": "https://api.deepseek.com/v1",
-  "modelFlash": "deepseek-v4.1-flash",
+  "modelFlash": "deepseek-flash",
   "modelPro": "deepseek-v4-pro"
 }

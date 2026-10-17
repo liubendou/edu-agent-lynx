@@ -1,21 +1,28 @@
 /*
- * motion.css —— "纸与墨"设计系统 · 动效 token（UID §1.2 三个动词、§六 M3 两族曲线、附录参数表）
- * M2b 2026-10-15。数值一律照抄 UID。
+ * motion.css —— "冷白极简"设计系统 · 动效 token（三个动词 + 两族曲线 + 规范时长）
+ * 冷白重构 v1：视觉走冷白极简，动效纪律不变（动效归零件，不归模型）。
  *
- * 动效母题只有三个动词（UID §1.2），多出来的动画先问属于哪一类，答不上来就删掉：
+ * 动效母题只有三个动词，多出来的动画先问属于哪一类，答不上来就删掉：
  *   生长（新东西出现）：缓出，向上 12px + 淡入，180ms
  *   归位（拖完松手）：弹簧吸附，不定时长，看物理（主线程数值驱动，TS 常量见 motion.ts）
  *   落下（被判定）：短促位移 + 颜色，120~240ms
  *
- * 硬分界（UID §7.1）：能被打断的动画不用 CSS 关键帧——按下、选中这类"松手即结束"的
+ * 硬分界：能被打断的动画不用 CSS 关键帧——按下、选中这类"松手即结束"的
  * 交给 CSS transition；拖拽、吸附、翻条一律主线程弹簧（@lynx-js/motion/mini）。
- * 动画只改 transform / opacity / z-index（UID §7.2 禁令1）。
+ * 动画只改 transform / opacity / z-index（禁令1）。
  *
  * 用法：挂 design-tokens class（tokens.css）后以 var(--dur-*) / var(--ease-*) 引用。
  */
 
 .design-tokens {
-  /* ── 时长 token（UID 附录：90 / 120 / 180 / 240 / 320ms，退出 200ms）── */
+  /* ── 规范时长 token（微交互设计 §3：四档语义，全端统一）──
+   * minimal（静止）档不删这些 token，只把 duration 归零；语义与入口原样保留。 */
+  --dur-micro: 120ms; /* 按压、chips 选中、hover、颜色切换 */
+  --dur-base: 200ms;  /* 面板进出、toast、卡片入场 */
+  --dur-slow: 600ms;  /* 大范围布局变化 */
+  --dur-draw: 800ms;  /* 描边类（对勾、掌握度环） */
+
+  /* ── 时长 token（90 / 120 / 180 / 240 / 320ms，退出 200ms）── */
   --dur-press: 90ms;   /* 按下反馈：scale 0.97 */
   --dur-select: 120ms; /* 选中 / 取消，ease-out */
   --dur-grow: 180ms;   /* 条目入场（生长）：上移 12px + 淡入，缓出 */
@@ -23,20 +30,20 @@
   --dur-page: 320ms;   /* 页面进入 */
   --dur-exit: 200ms;   /* 退出：永远比进入快，不该让人等 */
 
-  /* ── 空间曲线（位移、缩放）── UID §六 / 附录：M3 spatial 换算，带轻微过冲（实物感） */
+  /* ── 空间曲线（位移、缩放）── spatial 换算，带轻微过冲（实物感） */
   --ease-spatial: cubic-bezier(0.27, 1.06, 0.18, 1.00);
   --dur-spatial: 500ms;      /* spatial 默认 */
   --dur-spatial-fast: 350ms; /* spatial 快速 */
 
-  /* ── 透明度 / 颜色曲线 ── UID §六 / 附录：M3 effects 换算，不过冲（过冲显脏） */
+  /* ── 透明度 / 颜色曲线 ── effects 换算，不过冲（过冲显脏） */
   --ease-effects: cubic-bezier(0.31, 0.94, 0.34, 1.00);
   --dur-effects: 200ms;      /* effects 默认 */
   --dur-effects-fast: 150ms; /* effects 快速 */
 
-  /* ease-in 只用于退出（UID §八 / 附录） */
+  /* ease-in 只用于退出 */
   --ease-exit: ease-in;
 
-  /* ── 静止降级档（UID §7.4）：只留 120ms 的透明度切换 ──
+  /* ── 静止降级档（minimal / tier 'static'）：只留 120ms 的透明度切换 ──
    * 组件消费方式：theme.ts tierParams('static').opacityOnlyMs === 120 时，
    * 一切位移/缩放动画停用，透明度过渡统一用本 token。 */
   --dur-static-opacity: 120ms;

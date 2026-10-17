@@ -52,7 +52,11 @@ export function createDeepSeekVisionClient(
 ): VisionCloudPort {
   const completeVision = async ({ system, prompt, imageDataUrl }: { system: string; prompt: string; imageDataUrl: string }): Promise<string> => {
     if (config.mock || config.apiKey === '') {
-      throw new CloudClientError('invalid_response', 'Mock 模式无云侧识图能力（未配置 Key）');
+      // 去 Mock（S1.8 / R-P3）：缺 Key 时显式报「未配置」，绝不静默返回假识别结果。
+      throw new CloudClientError(
+        'not_configured',
+        '云侧未配置：识图需要 API Key，请到「设置」页填入 DeepSeek API Key 后重试。',
+      );
     }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);

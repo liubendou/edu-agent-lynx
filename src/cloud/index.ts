@@ -97,12 +97,15 @@ export type {
   MockCallRecord,
 } from './mock';
 
+export { UnconfiguredCloudClient, UNCONFIGURED_MESSAGE } from './unconfigured';
+
 import { loadCloudConfig } from './config';
 import type { CloudConfig, LoadCloudConfigOptions } from './config';
 import { CloudClient } from './client';
 import type { CloudLikeClient } from './client';
 import { MockCloudClient } from './mock';
 import type { MockCloudClientOptions } from './mock';
+import { UnconfiguredCloudClient } from './unconfigured';
 
 export interface CreateCloudClientOptions {
   /** 已有配置则跳过加载。 */
@@ -111,18 +114,27 @@ export interface CreateCloudClientOptions {
   loadConfigOptions?: LoadCloudConfigOptions;
   /** Mock 模式参数（延迟/升级应答注入）。 */
   mockOptions?: MockCloudClientOptions;
+  /**
+   * 显式允许 Mock（测试 fixture 用）；默认 false（生产语义）。
+   * config.mock=true 时：true → MockCloudClient；false → UnconfiguredCloudClient（每次调用显式报错）。
+   */
+  allowMock?: boolean;
 }
 
 /**
- * 客户端工厂（D7）：文件缺失或 key 为空 → 自动 Mock 模式（无 Key 全链路可开发可测）；
- * 有 Key → CloudClient（DeepSeek OpenAI 兼容，原生 fetch）。
+ * 客户端工厂（D7 / S1.8）：
+ *  - 有 Key → CloudClient（DeepSeek OpenAI 兼容，原生 fetch）；
+ *  - 无 Key（config.mock=true）且未显式 allowMock → UnconfiguredCloudClient（显式报错，绝不静默 Mock）；
+ *  - 无 Key 且 allowMock=true → MockCloudClient（测试用假数据）。
  */
 export async function createCloudClient(
   options: CreateCloudClientOptions = {},
 ): Promise<{ client: CloudLikeClient; config: CloudConfig }> {
   const config = options.config ?? await loadCloudConfig(options.loadConfigOptions);
-  const client: CloudLikeClient = config.mock
-    ? new MockCloudClient(options.mockOptions)
-    : new CloudClient({ config });
+  const client: CloudLikeClient = !config.mock
+    ? new CloudClient({ config })
+    : options.allowMock === true
+      ? new MockCloudClient(options.mockOptions)
+      : new UnconfiguredCloudClient();
   return { client, config };
 }

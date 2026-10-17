@@ -7,7 +7,11 @@
     "dev": "rspeedy dev",
     "preview": "rspeedy preview",
     "typecheck": "tsc -b",
-    "test": "rstest run"
+    "test": "rstest run",
+    "verify": "node scripts/verify.mjs",
+    "verify:static": "node scripts/verify-static.mjs",
+    "verify:unit": "rstest run",
+    "verify:runtime": "node scripts/verify-runtime.mjs"
   },
   "dependencies": {
     "@lynx-js/genui": "0.6.0",

@@ -1,14 +1,17 @@
 /*
- * typography.css —— "纸与墨"设计系统 · 排版（UID §1.1 排版表 + 附录字阶行）
- * M2b 2026-10-15。数值一律照抄 UID。
+ * typography.css —— "冷白极简"设计系统 · 排版（字阶 + 字阶行）
+ * 冷白重构 v1。基调（走法 B）：无衬线字体栈、大留白、弱边框。
  *
- * 排版表（UID §1.1）：
+ * 排版表：
  *   正文字号 16（不低于 15）；正文行高 1.75（T/CESS 5—2021：文字高度 < 4.5mm 时中文行高宜 1.7~2.4）；
- *   每行 20~25 字（超了收窄栏宽，不缩字号）；正文对比度 ≥ 4.5:1（WCAG AA，上线前实测）；
- *   字重正文 400、标题 600，不再往上加（纸底上字太粗会糊）。
+ *   每行 20~25 字（超了收窄栏宽，不缩字号）；正文对比度 ≥ 4.5:1（WCAG AA，见 tokens.css 注释）；
+ *   字重正文 400、标题 600；冷白底上不再往上加粗（字太粗会糊）。
  *
- * 字号单位说明：UID 要求"相对单位，跟随系统字号"。Lynx CSS 子集无 rem/em 相对字号，
- * 故按 px 落值；跟随系统字号缩放由宿主侧系统 fontScale 承担（M7 真机验证）。
+ * 字体栈（走法 B：全系统无衬线，零外部字体下载、零网络依赖，满足 M6 "动效不得依赖外部资源"）：
+ *   system-ui → -apple-system → "Segoe UI" → "PingFang SC" → "Microsoft YaHei" → "Noto Sans SC" → sans-serif
+ *
+ * 字号单位说明：要求"相对单位，跟随系统字号"。Lynx CSS 子集无 rem/em 相对字号，
+ * 故按 px 落值；跟随系统字号缩放由宿主侧系统 fontScale 承担（真机验证）。
  *
  * line-height 说明：Lynx line-height 支持无单位数值（官方文档），只作用于 <text> 元素，
  * 且值必须大于 font-size（会裁剪内容）——1.75 满足。
@@ -16,12 +19,12 @@
  * 颜色不在本文件设置：文字用 var(--ink) / var(--ink-soft)，见 tokens.css。
  */
 
-/* 中文栈（UID §1.1）：正文用系统无衬线 */
+/* 无衬线字体栈（走法 B）：全系统字体，标题正文同栈，不加载外部字体 */
 .Text {
-  font-family: system-ui, 'PingFang SC', 'Noto Sans SC';
+  font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
 }
 
-/* 字阶（UID 附录）：13 辅助 / 16 正文 / 18 卡标题 / 20 段落标题 / 28 首屏主张 */
+/* 字阶：13 辅助 / 16 正文 / 18 卡标题 / 20 段落标题 / 28 首屏主张 */
 .Text--aux {
   /* 辅助：出处、说明 */
   font-size: 13px;
@@ -54,23 +57,25 @@
 }
 
 /*
- * ── 标题衬线（可选，默认关）───────────────────────────────────────────
- * UID §1.1：标题上衬线（思源宋体 / Noto Serif SC），做出"标题像印的、正文像读的"对比。
- * 查证结论（2026-10-15）：Lynx 支持 @font-face（官方 at-rule 文档，src 支持 url()/local()，
+ * ── 衬线开关（保留但默认关闭）────────────────────────────────────────
+ * 冷白极简（走法 B）标题用同一无衬线栈，不做"标题像印的、正文像读的"衬线对比。
+ * 仅在宿主明确要求"讲义感"变体时，才按下面三步启用；默认保持注释。
+ *
+ * 查证结论：Lynx 支持 @font-face（官方 at-rule 文档，src 支持 url()/local()，
  * Android 可 local(file://绝对路径)），但要求客户端提供字体资源加载器——别把设计押在字体上。
  *
  * 启用方式（三步）：
  *   1. android/ 宿主接好字体资源加载器并内置 Noto Serif SC 字体文件；
  *   2. 取消下方 @font-face 与 .Text--serif 块的注释，src 换成宿主内置资源地址；
  *   3. 标题节点 class 追加 "Text--serif"。
- * 加载失败自动回退系统字（font-family 兜底栈）。
+ * 加载失败自动回退系统无衬线字（font-family 兜底栈）。
 
 @font-face {
   font-family: 'Noto Serif SC';
-  src: local('Noto Serif SC'), url('https://example.com/fonts/NotoSerifSC-Regular.otf'); // TODO(M6): 换宿主内置资源
+  src: local('Noto Serif SC'), url('https://example.com/fonts/NotoSerifSC-Regular.otf'); // TODO: 换宿主内置资源
 }
 
 .Text--serif {
-  font-family: 'Noto Serif SC', system-ui, 'PingFang SC', 'Noto Sans SC';
+  font-family: 'Noto Serif SC', system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif;
 }
  * ── 衬线开关结束 ────────────────────────────────────────────────────── */

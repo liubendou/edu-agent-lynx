@@ -3,7 +3,7 @@
 // 首启灌库接线 bootLikeApp），非测试专用拼装。旅程覆盖：
 //  ① 空库首启 → 种子灌库（幂等）→ 元课程小课（quick 不记账）→ 新学 standard 档答对出卡（硬规则2）；
 //  ② T+1 到期 → 复习优先（D10）→ 记账/1s 撤销/模糊不记账（D8）/补讲（硬规则3）→ FSRS 0.9 骨架 → 冷加载一致；
-//  ③ 工具链路：web_search 未配置/已配置（settings seam）、vision mock 降级与全链、成绩单解析入库；
+//  ③ 工具链路：web_search 未配置/已配置（settings seam）、vision 未配置降级与全链、成绩单解析入库；
 //  ④ 工具连续失败 ≥2 → tool_failures 升级（pro 单次）→ skill_escalation 事件留痕。
 import { describe, expect, test } from '@rstest/core';
 import { State } from 'ts-fsrs';
@@ -326,7 +326,7 @@ describe('M7 验收：核心学习闭环（真 composition 装配）', () => {
 // ── 旅程③④：工具链路 ─────────────────────────────────────────────
 
 describe('M7 验收：工具链路（web_search/vision/成绩单 + 限额升级）', () => {
-  test('旅程③：web_search 未配置/已配置（settings seam）、vision mock 降级与全链、成绩单解析入库', async () => {
+  test('旅程③：web_search 未配置/已配置（settings seam）、vision 未配置降级与全链、成绩单解析入库', async () => {
     const clk = clock(BASE);
 
     // ① 默认装配（mock 云）：web_search 未配置 → not_configured 业务失败不抛
@@ -336,10 +336,10 @@ describe('M7 验收：工具链路（web_search/vision/成绩单 + 限额升级�
     expect(r1.ok).toBe(false);
     expect(r1.error).toContain('not_configured');
 
-    // ② mock 云无 Key：识图降级 {ok:false} 不抛（主流程可继续，UI 走兜底）
+    // ② 无 Key：识图显式「未配置」降级 {ok:false} 不抛（主流程可继续，UI 走兜底）
     const r2 = await m1.tools.callTool('vision_capture', { imageDataUrl: DATA_URL }) as { ok: boolean; error?: string };
     expect(r2.ok).toBe(false);
-    expect(r2.error).toContain('Mock');
+    expect(r2.error).toContain('未配置');
 
     // ③ settings 配置 web_search 端点（composition 装配时读 settings 的真实 seam）+ stub fetch → 全链 ok
     const kv2 = createMemoryKVStore();

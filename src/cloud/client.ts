@@ -66,7 +66,7 @@ export interface CompleteTextResult {
   usage: CloudUsage;
 }
 
-export type CloudErrorCode = 'network' | 'timeout' | 'rate_limited' | 'content_filtered' | 'http' | 'invalid_response';
+export type CloudErrorCode = 'network' | 'timeout' | 'rate_limited' | 'content_filtered' | 'http' | 'invalid_response' | 'not_configured';
 
 /** 错误分类（网络/限流/内容过滤…）+ 重试判定。 */
 export class CloudClientError extends Error {

@@ -26,6 +26,7 @@ import { DIRECTION_LOCK_PX, SWIPE_THRESHOLD_RATIO } from '../design-system/motio
 import { hapticJudge, hapticSnap } from '../components/haptics';
 import { StreamSkeleton } from '../components';
 import type { AppMachine } from '../composition';
+import { TURN_FAILURE_NOTICE } from '../chat';
 import type { BootOutcome, Observation, SessionEndOutcome, TurnOutcome } from '../orchestrator/machine';
 import { useUndoWindow } from './hooks/useUndoWindow';
 
@@ -58,7 +59,8 @@ export function SessionPage({ machine, boot, initialText, onExit }: SessionPageP
   const snapshot = useA2UIStream(machine.a2uiParser);
   const [done, setDone] = useState(0);
   const [ended, setEnded] = useState<SessionEndOutcome | null>(null);
-  const [turnError, setTurnError] = useState<string | null>(null);
+  /** 回合失败的可见提示文案（三级兜底第③级；只放面向用户的话，不放内部错误） */
+  const [turnNotice, setTurnNotice] = useState<string | null>(null);
   const undo = useUndoWindow();
 
   const total = Math.max(1, boot.activation.aluIds.length);
@@ -69,8 +71,14 @@ export function SessionPage({ machine, boot, initialText, onExit }: SessionPageP
   const startedRef = useRef(false);
   const lastTarget = useRef<AluId | null>(null);
   const lastTurnAt = useRef(0);
+  /** 失败那一回合的 observation（可安全重放时给「接着讲」入口） */
+  const failedRef = useRef<Observation | null>(null);
 
-  /** 一回合：observation → machine.runTurn（流式渐进上屏）；失败给文案不白屏 */
+  /**
+   * 一回合：observation → machine.runTurn（流式渐进上屏）。
+   * 三级兜底第③级（S1.8 / R-P3）：失败不留白、不静默——本回合没接上就落一条可见提示并给
+   * 「接着讲」重试入口；提示只讲"下一步做什么"，不透出内部错误信息。
+   */
   const turn = useCallback(
     async (obs: Observation): Promise<TurnOutcome | null> => {
       if (busyRef.current || ended !== null) return null;
@@ -80,9 +88,18 @@ export function SessionPage({ machine, boot, initialText, onExit }: SessionPageP
         if (outcome.targetAluId !== null) lastTarget.current = outcome.targetAluId;
         if (outcome.phase !== 'wrap_up') setDone((d) => Math.min(total, d + 1));
         lastTurnAt.current = Date.now();
+        if (!outcome.ok) {
+          // validator 终态未过 = 本回合白跑：显式告知 + 可重放（重试入口见下方）
+          failedRef.current = obs;
+          setTurnNotice(TURN_FAILURE_NOTICE);
+        } else {
+          failedRef.current = null;
+          setTurnNotice(null);
+        }
         return outcome;
-      } catch (err) {
-        setTurnError(err instanceof Error ? err.message : String(err));
+      } catch {
+        failedRef.current = obs;
+        setTurnNotice(TURN_FAILURE_NOTICE);
         return null;
       } finally {
         busyRef.current = false;
@@ -90,6 +107,15 @@ export function SessionPage({ machine, boot, initialText, onExit }: SessionPageP
     },
     [machine, ended, total],
   );
+
+  /** 流内重试入口：重放失败那一回合（answer 带记账副作用 → 只留可见提示，不给入口） */
+  const retryTurn = useCallback(() => {
+    const obs = failedRef.current;
+    if (obs === null) return;
+    failedRef.current = null;
+    setTurnNotice(null);
+    void turn(obs);
+  }, [turn]);
 
   /** 会话收尾（四触发经 domain.detectSessionEndTrigger 判定；无触发/无活动会话返回 null） */
   const endSession = useCallback(
@@ -100,8 +126,9 @@ export function SessionPage({ machine, boot, initialText, onExit }: SessionPageP
         const outcome = await machine.orchestrator.notifySessionEnd(signals);
         if (outcome !== null) setEnded(outcome);
         return outcome;
-      } catch (err) {
-        setTurnError(err instanceof Error ? err.message : String(err));
+      } catch {
+        // 收尾失败同样不静默：给可见提示（用户可继续作答或重试收尾），不透出内部错误
+        setTurnNotice(TURN_FAILURE_NOTICE);
         return null;
       } finally {
         endingRef.current = false;
@@ -220,7 +247,7 @@ export function SessionPage({ machine, boot, initialText, onExit }: SessionPageP
     return () => clearTimeout(timer);
   }, [snapshot, ended, endSession]);
 
-  const showSkeleton = snapshot.components.length === 0 && turnError === null;
+  const showSkeleton = snapshot.components.length === 0 && turnNotice === null;
   const boundedLine = boot.boundedLine; // 开场有界话术（§10.1①：会话有界，不做开放结尾）
 
   return (
@@ -244,8 +271,15 @@ export function SessionPage({ machine, boot, initialText, onExit }: SessionPageP
         ) : (
           <A2UISurface state={snapshot} onAction={onAction} />
         )}
-        {turnError !== null ? (
-          <text className="Text Text--aux s-error">{`这一回合没接上（${turnError}），重试或收工都不丢进度`}</text>
+        {turnNotice !== null ? (
+          <view className="s-footer">
+            <text className="Text Text--aux s-error">{turnNotice}</text>
+            {failedRef.current !== null ? (
+              <view className="s-footer-btn pressable" bindtap={retryTurn}>
+                <text className="Text Text--body">接着讲</text>
+              </view>
+            ) : null}
+          </view>
         ) : null}
       </view>
       {undo.entry !== null ? (

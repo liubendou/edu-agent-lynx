@@ -1,6 +1,7 @@
 /**
- * motion.ts —— "纸与墨"设计系统 · 动效 TS 常量（UID 附录参数表，逐字照抄）
- * M2b 2026-10-15。
+ * motion.ts —— "冷白极简"设计系统 · 动效 TS 常量（参数表逐字保留）
+ * 冷白重构 v1：只动视觉（tokens.css/typography.css），本文件对外导出签名与数值不变，
+ * 以免消费方（src/App.tsx 等）受影响。
  *
  * 消费方：
  *  - `@lynx-js/motion/mini`（import 路径见 docs/04_依赖锁定清单.md §2，~135KB 仅数值）：

@@ -65,11 +65,12 @@ describe('M6 识图（vision.ts）', () => {
     expect(result.error).toContain('429');
   });
 
-  test('createDeepSeekVisionClient：Mock/无 Key → 明确 unavailable（经 recognizeImage 降级）', async () => {
+  test('createDeepSeekVisionClient：无 Key → 明确「未配置」报错（not_configured，经 recognizeImage 降级）', async () => {
     const client = createDeepSeekVisionClient({ apiKey: '', baseUrl: 'https://x', modelFlash: 'f', modelPro: 'p', mock: true, source: 'none' });
     const result = await recognizeImage({ imageDataUrl: DATA_URL }, client);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain('Mock 模式无云侧识图能力');
+    expect(result.error).toContain('未配置');
+    expect(result.error).toContain('设置');
   });
 
   test('createDeepSeekVisionClient：OpenAI 兼容多模态请求体 + Bearer 头 + flash 模型', async () => {

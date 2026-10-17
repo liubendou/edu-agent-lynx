@@ -1,6 +1,8 @@
 /*
- * App.css —— M4 页面布局样式（UID §2/§三；只补布局与局部组件，
+ * App.css —— M4 页面布局样式（冷白极简 v1；只补布局与局部组件，
  * 颜色/字阶/圆角/动效一律走 tokens.css + typography.css + motion.css 的 var）。
+ * 冷白分层：无投影，靠 surface(纯白) 压在 ambient(冷调近白) 上 + 1px --faint 细线；
+ * 大留白：页面级水平/底部 padding 统一放大到 --space-6 / --space-8。
  * 动画只改 transform/opacity（禁令1）：细线 scaleX、退场透明度。
  */
 
@@ -12,7 +14,7 @@
 
 .boot {
   flex: 1;
-  padding: var(--space-8) var(--space-4);
+  padding: var(--space-8) var(--space-6);
 }
 
 /* ── 页面骨架 ── */
@@ -22,12 +24,12 @@
 }
 
 .page-head {
-  padding: var(--space-4) var(--space-4) var(--space-2);
+  padding: var(--space-6) var(--space-6) var(--space-3);
 }
 
 .page-body {
   flex: 1;
-  padding: 0 var(--space-4) var(--space-8);
+  padding: 0 var(--space-6) var(--space-8);
 }
 
 .page-back {
@@ -52,7 +54,7 @@
   flex-direction: row;
   justify-content: flex-end;
   gap: var(--space-4);
-  padding: var(--space-3) var(--space-4) 0;
+  padding: var(--space-4) var(--space-6) 0;
 }
 
 .home-nav-link {
@@ -69,7 +71,7 @@
 }
 
 .home-bottom {
-  padding: var(--space-3) var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-6) var(--space-8);
   border-top-width: 1px;
   border-top-style: solid;
   border-top-color: var(--faint);
@@ -124,7 +126,7 @@
 
 /* 1s 撤销条（UID §三：压在卡片下方，不做弹窗） */
 .s-undo {
-  margin: var(--space-2) var(--space-4) 0;
+  margin: var(--space-2) var(--space-6) 0;
   padding: var(--space-3);
   align-items: center;
   border-radius: var(--radius-s);
@@ -142,7 +144,7 @@
 .s-footer {
   flex-direction: row;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-6) var(--space-8);
 }
 
 .s-footer-btn {
@@ -188,7 +190,7 @@
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3) var(--space-4) 0;
+  padding: var(--space-4) var(--space-6) 0;
 }
 
 .chat-nav-app {
@@ -210,7 +212,7 @@
 .chat-more {
   flex-direction: row;
   gap: var(--space-4);
-  padding: var(--space-2) var(--space-4) 0;
+  padding: var(--space-2) var(--space-6) 0;
 }
 
 .chat-more-link {
@@ -330,7 +332,7 @@
   flex-direction: row;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-6) var(--space-8);
   border-top-width: 1px;
   border-top-style: solid;
   border-top-color: var(--faint);

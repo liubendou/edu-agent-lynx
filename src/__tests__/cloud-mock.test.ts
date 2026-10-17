@@ -1,8 +1,10 @@
-// M2c Mock 测试：无 Key 自动 Mock、四档确定性 JSONL 合法性、流式分块与延迟注入、升级行为。
+// M2c Mock 测试：无 Key 显式报错（不静默 Mock）、显式 allowMock 走 Mock、四档确定性 JSONL 合法性、流式分块与延迟注入、升级行为。
 import { describe, expect, test } from '@rstest/core';
 import {
+  CloudClientError,
   MOCK_COMPONENT_NAMES,
   MockCloudClient,
+  UnconfiguredCloudClient,
   buildMockA2UILines,
   createCloudClient,
 } from '../cloud';
@@ -19,10 +21,34 @@ export function parseA2UILines(lines: string[]): A2UIMessageLike[] {
 
 const ALL_SKILLS = ['quick-learning', 'review', 'standard-learning', 'deep-learning'] as const;
 
-describe('cloud-mock: 无 Key 自动 Mock（D7）', () => {
-  test('配置缺失 → createCloudClient 返回 MockCloudClient', async () => {
+describe('cloud-mock: 无 Key 显式报错（S1.8 / R-P3，不静默 Mock）', () => {
+  test('配置缺失 → createCloudClient 返回 UnconfiguredCloudClient（非 MockCloudClient）', async () => {
     const { client, config } = await createCloudClient({ loadConfigOptions: { read: () => null } });
     expect(config.mock).toBe(true);
+    expect(client).toBeInstanceOf(UnconfiguredCloudClient);
+    expect(client).not.toBeInstanceOf(MockCloudClient);
+  });
+
+  test('UnconfiguredCloudClient：任一方法抛 CloudClientError(code=not_configured, 不可重试/未产出)', async () => {
+    const { client } = await createCloudClient({ loadConfigOptions: { read: () => null } });
+    const err = await client
+      .streamChat({ segments: segments({ taskInstruction: taskInstruction('quick-learning') }) })
+      .then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(CloudClientError);
+    expect((err as CloudClientError).code).toBe('not_configured');
+    expect((err as CloudClientError).retryable).toBe(false);
+    expect((err as CloudClientError).producedOutput).toBe(false);
+    // completeText 同口径
+    const err2 = await client.completeText({ prompt: 'x' }).then(() => null, (e: unknown) => e);
+    expect(err2).toBeInstanceOf(CloudClientError);
+    expect((err2 as CloudClientError).code).toBe('not_configured');
+  });
+
+  test('显式 allowMock:true → 仍返回 MockCloudClient（测试 fixture 通道）', async () => {
+    const { client } = await createCloudClient({
+      loadConfigOptions: { read: () => null },
+      allowMock: true,
+    });
     expect(client).toBeInstanceOf(MockCloudClient);
   });
 
@@ -32,6 +58,7 @@ describe('cloud-mock: 无 Key 自动 Mock（D7）', () => {
     });
     expect(config.mock).toBe(false);
     expect(client).not.toBeInstanceOf(MockCloudClient);
+    expect(client).not.toBeInstanceOf(UnconfiguredCloudClient);
   });
 });
 

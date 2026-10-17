@@ -21,6 +21,8 @@ import type {
   StreamChatParams,
 } from '../cloud/client';
 import { Home } from '../pages/Home';
+import { ChatPage } from '../pages/Chat';
+import { FIRST_RUN_OPENING, TURN_FAILURE_NOTICE, TURN_NO_KEY_NOTICE } from '../chat';
 import { SessionPage } from '../pages/Session';
 import { MapPage } from '../pages/MapPage';
 import { LibraryPage } from '../pages/LibraryPage';
@@ -107,12 +109,43 @@ class PatchedMockCloud implements CloudLikeClient {
   }
 }
 
+/** 三级兜底复现器：任何回合都失败（等价云侧 5xx / 断网），用于验证"不留白、不静默"。 */
+class FailingCloud implements CloudLikeClient {
+  streamChat(): Promise<CloudStreamResult> {
+    return Promise.reject(new Error('boom: 云侧不可用'));
+  }
+
+  completeText(): Promise<CompleteTextResult> {
+    return Promise.reject(new Error('boom'));
+  }
+}
+
+/** 首回合云侧失败、随后成功：复现"无关回合成功被误当成全局清场"的回归。
+ *  首回合（开场）失败 → 落一条可重试提示；随后回合成功 → 只能消费它自己那条提示。
+ *  inner 稍慢（delayMs），让"回合进行中"（打字骨架）这一态在 DOM 上可观察。 */
+class FailFirstCloud implements CloudLikeClient {
+  private calls = 0;
+  private readonly inner: CloudLikeClient = new PatchedMockCloud(new MockCloudClient({ delayMs: 150 }));
+
+  async streamChat(params: StreamChatParams): Promise<CloudStreamResult> {
+    this.calls += 1;
+    if (this.calls === 1) throw new Error('boom: 首回合云侧不可用');
+    return this.inner.streamChat(params);
+  }
+
+  completeText(params: CompleteTextParams): Promise<CompleteTextResult> {
+    return this.inner.completeText(params);
+  }
+}
+
 /** 复习场景机器：两张到期卡（r-low R 更低先出）+ 历史画像（非首启） */
-async function makeReviewMachine(): Promise<{ kv: KVStore; machine: AppMachine }> {
+async function makeReviewMachine(
+  cloud: CloudLikeClient = new PatchedMockCloud(new MockCloudClient()),
+): Promise<{ kv: KVStore; machine: AppMachine }> {
   const kv = createMemoryKVStore();
   const machine = await createAppMachine({
     kv,
-    cloud: new PatchedMockCloud(new MockCloudClient()),
+    cloud,
     now: () => BASE,
   });
   await machine.repos.putAlu(makeAlu('r-low'));
@@ -146,6 +179,17 @@ describe('M4 Session：A2UISurface 宿主 + 撤销窗口 + 收尾', () => {
     expect(await findByText('对')).toBeInTheDocument();
     expect(await findByText('模糊')).toBeInTheDocument();
     expect(await findByText('错')).toBeInTheDocument();
+  });
+
+  test('三级兜底：回合失败不留白——会话内可见提示 + 「接着讲」重试入口', async () => {
+    const { machine } = await makeReviewMachine(new FailingCloud());
+    const boot = await machine.orchestrator.boot(BASE);
+    const { findByText, queryByText } = render(
+      <SessionPage machine={machine} boot={boot} onExit={() => {}} />,
+    );
+    expect(await findByText(TURN_FAILURE_NOTICE)).toBeInTheDocument(); // 失败进可见提示（不白屏）
+    expect(await findByText('接着讲')).toBeInTheDocument(); // 可重试入口
+    expect(queryByText(/boom/)).toBeNull(); // 不暴露内部错误信息
   });
 
   test('判定推进 + 1s 撤销重呈：对→下一张 → 撤销→游标回退重呈原卡', async () => {
@@ -213,7 +257,7 @@ describe('M4 Home：条件首屏（PRD §6）', () => {
     expect(await findByText('继续效度这一块')).toBeInTheDocument();
   });
 
-  test('首启分支：方案 D 小课引导（先把方法装进来）', async () => {
+  test('首启分支：方案 D 小课引导（先把方法装进来；对话化后已无「开始小课」按钮）', async () => {
     const kv = createMemoryKVStore();
     const machine = await createAppMachine({ kv, cloud: new PatchedMockCloud(new MockCloudClient()) });
     const boot = await machine.orchestrator.boot(BASE);
@@ -222,9 +266,84 @@ describe('M4 Home：条件首屏（PRD §6）', () => {
       <Home machine={machine} boot={boot} navigate={() => {}} onOpenSession={() => {}} />,
     );
     expect(await findByText('先把方法装进来')).toBeInTheDocument();
-    expect(await findByText('开始小课')).toBeInTheDocument();
+    // 对话化后开场自动发生（脚本 §1.3），首启不再有「开始小课」这类需要点击的入口按钮
+    expect(queryByText('开始小课')).toBeNull();
     expect(queryByText('今天该学的一件事')).toBeNull(); // 首启不出现回访卡流
   });
+
+  test('首启分支：真实首屏是对话页（开场自动发生 + 输入框 + 建议 chips）', async () => {
+    const kv = createMemoryKVStore();
+    const machine = await createAppMachine({ kv, cloud: new PatchedMockCloud(new MockCloudClient()) });
+    const boot = await machine.orchestrator.boot(BASE);
+    expect(boot.isFirstRun).toBe(true);
+    // App.tsx 的唯一首屏路由到 pages/Chat.tsx（route 默认 'chat'）——以真实页面为准断言
+    const { findByText, findByPlaceholderText, queryByText, container } = render(
+      <ChatPage machine={machine} boot={boot} navigate={() => {}} cloudMock={false} />,
+    );
+    expect(await findByText(FIRST_RUN_OPENING)).toBeInTheDocument(); // 开场消息自动落进流，无需点击
+    expect(await findByPlaceholderText('直接说你想学什么…')).toBeInTheDocument(); // 常驻输入框
+    expect(await findByText('讲透「检索练习」')).toBeInTheDocument(); // 建议 chips（用户一开口即收起）
+    expect(queryByText('开始小课')).toBeNull();
+    // 正常回合收口后不留兜底提示（防"每回合误报失败"）；打字骨架必被真实内容顶掉（脚本 §4-4）
+    await waitFor(() => expect(queryByText(TURN_FAILURE_NOTICE)).toBeNull());
+    await waitFor(() => expect(container.querySelectorAll('.chat-bubble--typing')).toHaveLength(0));
+  });
+});
+
+// ── 三级兜底 + 无 Key 引导（验收 S1.8 / 红线 R-P3）──────────────────
+
+describe('M4 首屏三级兜底：回合失败不留白、不静默', () => {
+  test('云侧异常：开场仍在 + 流内可见失败提示 + 「接着讲」重试入口（无堆栈外泄）', async () => {
+    const kv = createMemoryKVStore();
+    const machine = await createAppMachine({ kv, cloud: new FailingCloud() });
+    const boot = await machine.orchestrator.boot(BASE);
+    const { findByText, queryByText } = render(
+      <ChatPage machine={machine} boot={boot} navigate={() => {}} cloudMock={false} />,
+    );
+    expect(await findByText(FIRST_RUN_OPENING)).toBeInTheDocument(); // 开场消息照常可见
+    expect(await findByText(TURN_FAILURE_NOTICE)).toBeInTheDocument(); // 失败提示进会话流（不白屏）
+    expect(await findByText('接着讲')).toBeInTheDocument(); // 可重试入口
+    expect(queryByText(/boom/)).toBeNull(); // 不暴露内部错误信息/堆栈
+  });
+
+  test('无 Key（cloudMock=true）：失败提示引导去设置页填 API Key（不做首屏拦截）', async () => {
+    const kv = createMemoryKVStore();
+    const machine = await createAppMachine({ kv, cloud: new FailingCloud() });
+    const boot = await machine.orchestrator.boot(BASE);
+    const { findByText } = render(
+      <ChatPage machine={machine} boot={boot} navigate={() => {}} cloudMock />,
+    );
+    expect(await findByText(TURN_NO_KEY_NOTICE)).toBeInTheDocument();
+    expect(await findByText('去设置页填 API Key')).toBeInTheDocument();
+  });
+
+  test('回归：无关回合成功不误抹其它提示的「接着讲」；被重放成功的那条提示移出流', async () => {
+    const kv = createMemoryKVStore();
+    const machine = await createAppMachine({ kv, cloud: new FailFirstCloud() });
+    const boot = await machine.orchestrator.boot(BASE);
+    const { container, findByText, queryByText } = render(
+      <ChatPage machine={machine} boot={boot} navigate={() => {}} cloudMock={false} />,
+    );
+
+    // 开场回合失败 → 流内一条带「接着讲」的失败提示（其 retry 绑定开场那条 observation 的引用）
+    expect(await findByText(TURN_FAILURE_NOTICE)).toBeInTheDocument();
+    expect(await findByText('接着讲')).toBeInTheDocument();
+
+    // 与之无关的另一回合（用户发言）成功：不得被当成全局清场，连带抹掉上一条提示的重试入口
+    fireEvent.tap(await findByText('讲透「检索练习」'));
+    await waitFor(() => expect(container.querySelector('.chat-bubble--typing')).not.toBeNull()); // 回合确实在跑
+    await waitFor(() => {
+      // 无关回合成功上屏（卡片出现）+ 收口（骨架撤下）：与提示更新同一批提交，此刻提示状态已定
+      expect(container.querySelector('.chat-cards')).not.toBeNull();
+      expect(container.querySelectorAll('.chat-bubble--typing')).toHaveLength(0);
+    });
+    expect(queryByText(TURN_FAILURE_NOTICE)).toBeInTheDocument(); // 与本回合无关，提示仍留在流里
+    expect(queryByText('接着讲')).toBeInTheDocument(); // 重试入口未被误抹（bug 回归点）
+
+    // 点「接着讲」真正重放那条失败回合 → 成功 → 该条提示整条移出流（不再自相矛盾地留着）
+    fireEvent.tap(await findByText('接着讲'));
+    await waitFor(() => expect(queryByText(TURN_FAILURE_NOTICE)).toBeNull());
+  }, 15_000);
 });
 
 // ── 四页面 ───────────────────────────────────────────────────────
