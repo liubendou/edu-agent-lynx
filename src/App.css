@@ -176,3 +176,191 @@
 .lib-bookmark {
   padding: var(--space-2) 0;
 }
+
+/* ── 对话页（唯一首屏；改造清单批次 1）───────────────────────────────
+ * 对话外壳（src/chat/*）客户端本地渲染，不进 a2ui catalog / registry。
+ * 滚动交给原生 scroll-view（UID §7 空间一致：不重造惯性）。 */
+.chat-page {
+  flex: 1;
+}
+
+.chat-nav {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.chat-nav-app {
+  color: var(--ink);
+}
+
+.chat-nav-actions {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.chat-nav-icon {
+  padding: var(--space-2) 0;
+  color: var(--ink-soft);
+}
+
+/* ☰ 更多：次级页轻入口（地图/资料库/成长），默认收起，点击才展开 */
+.chat-more {
+  flex-direction: row;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4) 0;
+}
+
+.chat-more-link {
+  padding: var(--space-2) 0;
+  color: var(--accent);
+}
+
+.chat-body {
+  flex: 1;
+}
+
+.chat-list {
+  flex: 1;
+}
+
+/* 对话流：单列，从上往下排（脚本 §1.1-2） */
+.chat-row {
+  flex-direction: row;
+  align-items: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.chat-row--agent {
+  justify-content: flex-start;
+}
+
+.chat-row--user {
+  justify-content: flex-end;
+}
+
+/* agent 标识（脚本 §1.1-3：带固定 agent 标识） */
+.chat-avatar {
+  width: 10px;
+  height: 10px;
+  margin-top: var(--space-3);
+  margin-right: var(--space-2);
+  border-radius: var(--radius-pill);
+  background-color: var(--accent);
+}
+
+.chat-bubble {
+  max-width: 80%;
+  padding: var(--space-3);
+  border-radius: var(--radius-m);
+}
+
+.chat-bubble--agent {
+  background-color: var(--surface);
+  border: 1px solid var(--faint);
+}
+
+.chat-bubble--user {
+  background-color: var(--accent);
+}
+
+/* 颜色显式落在 text 上（Lynx 子集下 text 颜色不依赖继承） */
+.chat-text {
+  color: var(--ink);
+}
+
+.chat-text--user {
+  color: var(--surface);
+}
+
+/* 打字骨架：三点脉冲，只改 opacity（禁令1） */
+.chat-bubble--typing {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-1);
+  background-color: var(--surface);
+  border: 1px solid var(--faint);
+}
+
+.chat-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background-color: var(--ink-soft);
+  animation: chat-dot-pulse 900ms var(--ease-effects) infinite alternate;
+}
+
+@keyframes chat-dot-pulse {
+  from { opacity: 0.25; }
+  to   { opacity: 1.0; }
+}
+
+.chat-dot--2 { animation-delay: 150ms; }
+.chat-dot--3 { animation-delay: 300ms; }
+
+/* 卡片位：A2UI 快照嵌在对话流里（跟 agent 一侧，不单独占页） */
+.chat-cards {
+  margin-bottom: var(--space-3);
+}
+
+/* 示例问题（豆包式入口）：自动换行的可点胶囊，一条一句 */
+.chat-chips {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.chat-chip {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--faint);
+  background-color: var(--surface);
+}
+
+.chat-chip-text {
+  color: var(--accent);
+}
+
+.chat-composer {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-6);
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: var(--faint);
+}
+
+.chat-composer-input {
+  flex: 1;
+  height: 44px; /* 触摸目标下限（UID 附录） */
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-s);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--faint);
+  background-color: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.chat-composer-send {
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-s);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--faint);
+  background-color: var(--surface);
+}
+
+.chat-composer-send-text {
+  color: var(--accent);
+}

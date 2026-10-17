@@ -10,7 +10,7 @@
  * 顶部轻入口：地图/资料库/画像/成长（无 TabBar/九宫格/抽屉，UID §八）。
  */
 import { useCallback, useState } from '@lynx-js/react';
-import { DueChip, EntryCard, StreamSkeleton, TodayPlanPanel } from '../components';
+import { DueChip, EntryCard, TodayPlanPanel } from '../components';
 import type { AppMachine } from '../composition';
 import type { BootOutcome } from '../orchestrator/machine';
 import type { TodayDecision } from '../domain/decision';
@@ -63,7 +63,8 @@ export function Home({ machine, boot, navigate, onOpenSession }: HomePageProps) 
     [snap],
   );
 
-  // 首启：方案 D 小课引导（§2.5：骨架+首条卡容器先出，小课 3s 后开始——M4 由 Mock 流承接）
+  // 首启分支（保留作回退对比；首屏已由 pages/Chat.tsx 承担）：
+  // 删「开始小课」按钮与永不填充的骨架——体验脚本 §4-1/§4-4 反例，开场自动发生不允许等点击。
   if (boot.isFirstRun) {
     return (
       <view className="page home-page">
@@ -81,11 +82,7 @@ export function Home({ machine, boot, navigate, onOpenSession }: HomePageProps) 
             <text className="Text Text--body" style={{ color: 'var(--ink-soft)' }}>
               {`《${SEED_META_COURSE.subjects[0].name}》小课：${SEED_META_COURSE.modules.map((m) => m.name).join('、')}——边讲边插问，答对才算学会。`}
             </text>
-            <view className="tpp-start pressable" bindtap={() => onOpenSession()}>
-              <text className="Text Text--body tpp-start-text">开始小课</text>
-            </view>
           </view>
-          <StreamSkeleton heightPx={120} />
         </view>
       </view>
     );

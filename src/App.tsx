@@ -18,6 +18,7 @@ import type { BootOutcome } from './orchestrator/machine';
 import { readColorScheme, themeClassName } from './design-system/theme';
 import { setHapticsSignals } from './components/haptics';
 import { StreamSkeleton } from './components';
+import { ChatPage } from './pages/Chat';
 import { Home } from './pages/Home';
 import { SessionPage } from './pages/Session';
 import { MapPage } from './pages/MapPage';
@@ -30,7 +31,8 @@ export function App() {
   const [machine, setMachine] = useState<AppMachine | null>(null);
   const [boot, setBoot] = useState<BootOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [route, setRoute] = useState<Route>('home');
+  // 唯一首屏 = chat（改造清单 §1）；home/session 暂留回退对比，批次 3 清理
+  const [route, setRoute] = useState<Route>('chat');
   const [sessionSeed, setSessionSeed] = useState<{ initialText?: string; seq: number }>({ seq: 0 });
 
   // 冷启动装配（一次）：machine → 主题/触觉门控接线 → boot
@@ -98,6 +100,8 @@ export function App() {
             <StreamSkeleton heightPx={240} />
           )}
         </view>
+      ) : route === 'chat' ? (
+        <ChatPage machine={machine} boot={boot} navigate={setRoute} />
       ) : route === 'home' ? (
         <Home machine={machine} boot={boot} navigate={setRoute} onOpenSession={openSession} />
       ) : route === 'session' ? (
@@ -109,13 +113,13 @@ export function App() {
           onExit={exitSession}
         />
       ) : route === 'map' ? (
-        <MapPage machine={machine} onBack={() => setRoute('home')} />
+        <MapPage machine={machine} onBack={() => setRoute('chat')} />
       ) : route === 'library' ? (
-        <LibraryPage machine={machine} onBack={() => setRoute('home')} />
+        <LibraryPage machine={machine} onBack={() => setRoute('chat')} />
       ) : route === 'profile' ? (
-        <ProfilePage machine={machine} onBack={() => setRoute('home')} />
+        <ProfilePage machine={machine} onBack={() => setRoute('chat')} />
       ) : (
-        <GrowthPage machine={machine} onBack={() => setRoute('home')} />
+        <GrowthPage machine={machine} onBack={() => setRoute('chat')} />
       )}
     </view>
   );
